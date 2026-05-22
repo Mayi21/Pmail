@@ -1,0 +1,135 @@
+name: Deploy PMail
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare
+    runs-on: ubuntu-latest
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+      D1_DATABASE_NAME: ${{ secrets.D1_DATABASE_NAME }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      KV_JWT_KEYS_ID: ${{ secrets.KV_JWT_KEYS_ID }}
+      KV_CACHE_ID: ${{ secrets.KV_CACHE_ID }}
+      DOMAIN: ${{ secrets.DOMAIN }}
+      ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+      OAUTH_LINUXDO_CLIENT_ID: ${{ secrets.OAUTH_LINUXDO_CLIENT_ID }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            workers/api/package-lock.json
+            workers/email/package-lock.json
+            web/package-lock.json
+
+      - name: Render wrangler.toml from templates
+        run: |
+          set -euo pipefail
+          envsubst < workers/api/wrangler.toml.example > workers/api/wrangler.toml
+          envsubst < workers/email/wrangler.toml.example > workers/email/wrangler.toml
+          echo "--- workers/api/wrangler.toml ---"
+          cat workers/api/wrangler.toml
+          echo "--- workers/email/wrangler.toml ---"
+          cat workers/email/wrangler.toml
+
+      - name: Install API Worker dependencies
+        working-directory: workers/api
+        run: npm ci
+
+      - name: Install Email Worker dependencies
+        working-directory: workers/email
+        run: npm ci
+
+      - name: Install Web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Apply D1 database migrations
+        working-directory: workers/api
+        run: npx wrangler d1 migrations apply "$D1_DATABASE_NAME" --remote
+
+      - name: Push API Worker secret - DATABASE_ENCRYPTION_KEY
+        working-directory: workers/api
+        env:
+          SECRET_VALUE: ${{ secrets.DATABASE_ENCRYPTION_KEY }}
+        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put DATABASE_ENCRYPTION_KEY
+
+      - name: Push API Worker secret - TURNSTILE_SECRET_KEY
+        working-directory: workers/api
+        env:
+          SECRET_VALUE: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put TURNSTILE_SECRET_KEY
+
+      - name: Push API Worker secret - OAUTH_LINUXDO_CLIENT_SECRET
+        working-directory: workers/api
+        env:
+          SECRET_VALUE: ${{ secrets.OAUTH_LINUXDO_CLIENT_SECRET }}
+        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
+
+      - name: Push API Worker secret - SENDGRID_API_KEY (optional)
+        if: ${{ secrets.SENDGRID_API_KEY != '' }}
+        working-directory: workers/api
+        env:
+          SECRET_VALUE: ${{ secrets.SENDGRID_API_KEY }}
+        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put SENDGRID_API_KEY
+
+      - name: Push Email Worker secret - DATABASE_ENCRYPTION_KEY
+        working-directory: workers/email
+        env:
+          SECRET_VALUE: ${{ secrets.DATABASE_ENCRYPTION_KEY }}
+        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put DATABASE_ENCRYPTION_KEY
+
+      - name: Deploy API Worker
+        working-directory: workers/api
+        run: npx wrangler deploy
+
+      - name: Deploy Email Worker
+        working-directory: workers/email
+        run: npx wrangler deploy
+
+      - name: Build Web frontend
+        working-directory: web
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+        run: npm run build
+
+      - name: Deploy Cloudflare Pages
+        working-directory: web
+        env:
+          PAGES_PROJECT_NAME: ${{ secrets.PAGES_PROJECT_NAME }}
+        run: npx wrangler pages deploy dist --project-name="$PAGES_PROJECT_NAME" --branch=main
+
+      - name: Health check
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_URL:-}" ]; then
+            echo "API_URL secret is not set; skipping health check is not allowed - failing."
+            exit 1
+          fi
+          echo "Probing ${API_URL}/health"
+          curl -fsS --retry 5 --retry-delay 5 --retry-connrefused "${API_URL}/health"

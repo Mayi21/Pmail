@@ -1,0 +1,268 @@
+/**
+ * Register Page Component
+ */
+
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuthStore } from '../stores/authStore';
+import toast from 'react-hot-toast';
+import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import TurnstileWidget from '../components/TurnstileWidget';
+import LinuxdoLoginButton from '../components/LinuxdoLoginButton';
+
+// Form-specific schema (without turnstileToken)
+const registerFormSchema = z.object({
+  username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/),
+  email: z.string().email(),
+  password: z.string()
+    .min(8)
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
+      'Password must contain uppercase, lowercase and number'),
+});
+
+type RegisterFormData = z.infer<typeof registerFormSchema>;
+
+export default function RegisterPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { register: registerUser, isLoading } = useAuthStore();
+  const [showPassword, setShowPassword] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string>('');
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerFormSchema),
+  });
+
+  const onSubmit = async (data: RegisterFormData) => {
+    try {
+      // Check if Turnstile token is available
+      if (!turnstileToken) {
+        toast.error('Please complete the verification');
+        return;
+      }
+
+      // Include Turnstile token in registration data
+      await registerUser(data.username, data.email, data.password, turnstileToken);
+      toast.success(t('auth.registerSuccess'));
+      navigate('/login');
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        toast.error(error.response.data.error);
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-neo-warm-white px-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white border-3 border-neo-black rounded-neo-xl p-8">
+          {/* Language Switcher */}
+          <div className="flex justify-end mb-4">
+            <LanguageSwitcher />
+          </div>
+
+          {/* Logo and Title */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-neo-cyan border-3 border-neo-black mb-4">
+              <svg
+                className="w-8 h-8 text-neo-black"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-neo-black heading-neo-display">{t('auth.createAccount')}</h1>
+            <p className="text-neo-gray mt-2">{t('auth.joinPMail')}</p>
+          </div>
+
+          {/* Register Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-bold text-neo-black mb-2">
+                {t('auth.username')}
+              </label>
+              <input
+                type="text"
+                {...register('username')}
+                className="input-neo w-full"
+                placeholder={t('auth.chooseUsername')}
+              />
+              {errors.username && (
+                <p className="text-neo-red text-sm mt-1 font-medium">{errors.username.message}</p>
+              )}
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-bold text-neo-black mb-2">
+                {t('auth.email')}
+              </label>
+              <input
+                type="email"
+                {...register('email')}
+                className="input-neo w-full"
+                placeholder={t('auth.enterEmail')}
+              />
+              {errors.email && (
+                <p className="text-neo-red text-sm mt-1 font-medium">{errors.email.message}</p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-bold text-neo-black mb-2">
+                {t('auth.password')}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  {...register('password')}
+                  className="input-neo w-full pr-12"
+                  placeholder={t('auth.createPassword')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center border-3 border-neo-black rounded-neo bg-white hover:bg-gray-50 active:translate-x-0.5 active:translate-y-0.5 transition-all"
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                >
+                  <svg
+                    className="w-5 h-5 text-neo-black"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                  >
+                    {showPassword ? (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    ) : (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"
+                      />
+                    )}
+                  </svg>
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-neo-red text-sm mt-1 font-medium">{errors.password.message}</p>
+              )}
+              <p className="text-xs text-neo-gray mt-1">
+                {t('auth.passwordHint')}
+              </p>
+            </div>
+
+            {/* Terms & Conditions */}
+            <div className="flex items-start">
+              <input
+                type="checkbox"
+                required
+                className="mt-1 w-5 h-5 border-3 border-neo-black rounded-neo-xs accent-neo-cyan cursor-pointer hover:border-4 transition-all"
+              />
+              <label className="ml-2 text-sm text-neo-black">
+                {t('auth.agreeToTerms')}{' '}
+                <a href="/terms" className="font-bold hover:underline decoration-3 decoration-neo-black">
+                  {t('auth.termsOfService')}
+                </a>{' '}
+                {t('auth.and')}{' '}
+                <a href="/privacy" className="font-bold hover:underline decoration-3 decoration-neo-black">
+                  {t('auth.privacyPolicy')}
+                </a>
+              </label>
+            </div>
+
+            {/* Turnstile Verification */}
+            <div className="flex justify-center">
+              <TurnstileWidget
+                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || ''}
+                onSuccess={setTurnstileToken}
+                onError={() => toast.error('Verification failed, please refresh the page')}
+                onExpire={() => setTurnstileToken('')}
+                theme="light"
+                size="normal"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading || !turnstileToken}
+              className="btn-neo-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? t('auth.creatingAccount') : t('auth.signUp')}
+            </button>
+          </form>
+
+          {/* OAuth Registration */}
+          <div className="mt-6">
+            <LinuxdoLoginButton />
+            <p className="mt-2 text-xs text-center text-gray-500">
+              Using Linux.do login will automatically create an account
+            </p>
+          </div>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t-3 border-neo-black"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-3 bg-white text-neo-gray font-bold">{t('common.or')}</span>
+            </div>
+          </div>
+
+          {/* Login Link */}
+          <div className="text-center">
+            <span className="text-neo-black">{t('auth.alreadyHaveAccount')} </span>
+            <Link
+              to="/login"
+              className="text-neo-black font-bold hover:underline decoration-3 decoration-neo-black"
+            >
+              {t('auth.signIn')}
+            </Link>
+          </div>
+        </div>
+
+        {/* Benefits */}
+        <div className="mt-8 text-center">
+          <h3 className="text-sm font-bold text-neo-black mb-4">{t('auth.whyPMail')}</h3>
+          <div className="flex justify-center space-x-8 text-sm text-neo-black font-medium">
+            <div className="flex flex-col items-center">
+              <span className="text-3xl mb-2" role="img" aria-label="Privacy">🔒</span>
+              <span>{t('auth.privacyFirst')}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-3xl mb-2" role="img" aria-label="Fast">⚡</span>
+              <span>{t('auth.instantSetup')}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-3xl mb-2" role="img" aria-label="No spam">🎯</span>
+              <span>{t('auth.noSpam')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

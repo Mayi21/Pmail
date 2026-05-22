@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with rounded corners -->
+  <rect width="32" height="32" rx="6" fill="#4ECDC4"/>
+
+  <!-- Envelope body -->
+  <rect x="6" y="11" width="20" height="14" rx="1" fill="#FFFFFF" stroke="#000000" stroke-width="2.5"/>
+
+  <!-- Envelope flap - simplified triangle -->
+  <path d="M 6 11 L 16 18 L 26 11" fill="none" stroke="#000000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Small accent dot in top right corner -->
+  <circle cx="24" cy="8" r="2.5" fill="#FF6B9D" stroke="#000000" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: PMail 北向 API
+  description: |
+    PMail 临时邮箱服务的北向 API 接口文档。
+
+    ## 认证方式
+
+    所有北向 API 接口都需要使用 API Key 进行认证。在请求头中添加 `X-API-Key` 字段，值为您的 API Key。
+
+    ## 权限说明
+
+    API Key 具有两种权限：
+    - **read**: 读取权限，可以查询邮箱和邮件信息
+    - **write**: 写入权限，可以创建和删除邮箱
+
+    ## 速率限制
+
+    API 请求受到速率限制保护。超过限制会返回 `429 Too Many Requests` 错误。
+
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://your-pmail-api.your-subdomain.workers.dev
+    description: 生产环境
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Mailbox
+    description: 邮箱管理相关接口
+  - name: Email
+    description: 邮件查询相关接口
+
+paths:
+  /v1/mailbox:
+    post:
+      tags:
+        - Mailbox
+      summary: 创建临时邮箱
+      description: |
+        创建一个新的临时邮箱。需要 `write` 权限。
+
+        邮箱地址会自动生成，您可以选择指定前缀和过期时间。
+      operationId: createMailbox
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        description: 创建邮箱的参数（可选）
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prefix:
+                  type: string
+                  description: 邮箱地址前缀（1-10个字符，仅限小写字母和数字）
+                  pattern: '^[a-z0-9]{1,10}$'
+                  example: test
+                expires_in:
+                  type: integer
+                  description: 邮箱有效期（秒），范围 600-86400（10分钟到24小时）
+                  minimum: 600
+                  maximum: 86400
+                  example: 3600
+            examples:
+              default:
+                summary: 默认创建（1小时有效期）
+                value: {}
+              custom:
+                summary: 自定义参数
+                value:
+                  prefix: mytest
+                  expires_in: 7200
+      responses:
+        '200':
+          description: 邮箱创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Mailbox'
+              examples:
+                success:
+                  summary: 创建成功
+                  value:
+                    success: true
+                    data:
+                      id: 14
+                      address: 1atr64cmly9e5k4z@your-domain.com
+                      created_at: '2025-10-23 17:05:48'
+                      expires_at: '2025-10-23 18:05:48'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/mailboxes:
+    get:
+      tags:
+        - Mailbox
+      summary: 获取邮箱列表
+      description: |
+        获取当前用户的所有邮箱列表。需要 `read` 权限。
+
+        返回结果包含邮箱地址、创建时间、过期时间、邮件数量等信息。
+      operationId: listMailboxes
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MailboxWithStats'
+              examples:
+                success:
+                  summary: 获取成功
+                  value:
+                    success: true
+                    data:
+                      - address: 1atr64cmly9e5k4z@your-domain.com
+                        created_at: '2025-10-23 17:05:48'
+                        expires_at: '2025-10-23 18:05:48'
+                        email_count: 1
+                        unread_count: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/mailbox/{address}:
+    delete:
+      tags:
+        - Mailbox
+      summary: 删除邮箱
+      description: |
+        删除指定的临时邮箱。需要 `write` 权限。
+
+        注意：这是软删除操作，邮箱数据会保留但标记为已删除。
+      operationId: deleteMailbox
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: 邮箱地址
+          schema:
+            type: string
+            format: email
+          example: 1atr64cmly9e5k4z@your-domain.com
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Mailbox deleted successfully
+              examples:
+                success:
+                  summary: 删除成功
+                  value:
+                    success: true
+                    message: Mailbox deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/MailboxNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/mailbox/{address}/emails:
+    get:
+      tags:
+        - Email
+      summary: 获取邮箱的邮件列表
+      description: |
+        获取指定邮箱的所有邮件列表。需要 `read` 权限。
+
+        支持分页查询，默认每页返回 20 条邮件。
+      operationId: listEmails
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: 邮箱地址
+          schema:
+            type: string
+            format: email
+          example: 1atr64cmly9e5k4z@your-domain.com
+        - name: page
+          in: query
+          description: 页码（从 1 开始）
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          description: 每页数量（1-100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          emails:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/EmailListItem'
+                          total:
+                            type: integer
+                            description: 邮件总数
+                          page:
+                            type: integer
+                            description: 当前页码
+                          limit:
+                            type: integer
+                            description: 每页数量
+              examples:
+                withEmails:
+                  summary: 有邮件的响应
+                  value:
+                    success: true
+                    data:
+                      emails:
+                        - id: 13
+                          from_address: test@example.com
+                          from_name: Test User
+                          to_address: 1atr64cmly9e5k4z@your-domain.com
+                          subject: Test Email
+                          body_text: This is a test email...
+                          body_html: <div>This is a test email...</div>
+                          received_at: '2025-10-23 17:06:36'
+                          is_read: 0
+                          size_bytes: 5697
+                          attachment_count: 0
+                          has_attachments: false
+                      total: 1
+                      page: 1
+                      limit: 20
+                empty:
+                  summary: 空邮箱的响应
+                  value:
+                    success: true
+                    data:
+                      emails: []
+                      total: 0
+                      page: 1
+                      limit: 20
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/MailboxNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/email/{id}:
+    get:
+      tags:
+        - Email
+      summary: 获取邮件详情
+      description: |
+        获取单封邮件的完整详情。需要 `read` 权限。
+
+        返回内容包括邮件正文、完整头部、原始内容、附件列表等。
+
+        **注意**: 访问邮件会自动将其标记为已读。
+      operationId: getEmailDetail
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 邮件 ID
+          schema:
+            type: integer
+          example: 13
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/EmailDetail'
+              examples:
+                success:
+                  summary: 获取成功
+                  value:
+                    success: true
+                    data:
+                      id: 13
+                      from_address: sender@example.com
+                      from_name: null
+                      to_address: 1atr64cmly9e5k4z@your-domain.com
+                      subject: '111'
+                      body_text: "1111\n\n"
+                      body_html: "<div dir=\"ltr\">1111</div>\n\n"
+                      headers: '{"content-type":"multipart/alternative","date":"Fri, 24 Oct 2025 01:06:23 +0800"}'
+                      received_at: '2025-10-23 17:06:36'
+                      is_read: 0
+                      size_bytes: 5697
+                      raw_content: 'Received: from mail...'
+                      attachments: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/EmailNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API Key 认证。
+
+        在请求头中添加 `X-API-Key` 字段，值为您的 API Key。
+
+        API Key 分为两种权限：
+        - **read**: 可以读取邮箱和邮件信息
+        - **write**: 可以创建和删除邮箱
+
+  schemas:
+    SuccessResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: 请求是否成功
+          example: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+        - error_code
+      properties:
+        success:
+          type: boolean
+          description: 请求是否成功
+          example: false
+        error:
+          type: string
+          description: 错误描述信息
+          example: Mailbox not found or access denied
+        error_code:
+          type: string
+          description: 错误代码
+          example: MAILBOX_NOT_FOUND
+        details:
+          type: object
+          description: 详细错误信息（仅在验证错误时提供）
+
+    Mailbox:
+      type: object
+      required:
+        - id
+        - address
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: integer
+          description: 邮箱 ID
+          example: 14
+        address:
+          type: string
+          format: email
+          description: 邮箱地址
+          example: 1atr64cmly9e5k4z@your-domain.com
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: '2025-10-23 17:05:48'
+        expires_at:
+          type: string
+          format: date-time
+          description: 过期时间
+          example: '2025-10-23 18:05:48'
+
+    MailboxWithStats:
+      allOf:
+        - type: object
+          required:
+            - address
+            - created_at
+            - expires_at
+            - email_count
+            - unread_count
+          properties:
+            address:
+              type: string
+              format: email
+              description: 邮箱地址
+              example: 1atr64cmly9e5k4z@your-domain.com
+            created_at:
+              type: string
+              format: date-time
+              description: 创建时间
+              example: '2025-10-23 17:05:48'
+            expires_at:
+              type: string
+              format: date-time
+              description: 过期时间
+              example: '2025-10-23 18:05:48'
+            email_count:
+              type: integer
+              description: 邮件总数
+              example: 1
+            unread_count:
+              type: integer
+              description: 未读邮件数
+              example: 0
+
+    EmailListItem:
+      type: object
+      required:
+        - id
+        - from_address
+        - to_address
+        - subject
+        - received_at
+        - is_read
+        - size_bytes
+        - has_attachments
+      properties:
+        id:
+          type: integer
+          description: 邮件 ID
+          example: 13
+        from_address:
+          type: string
+          format: email
+          description: 发件人邮箱
+          example: test@example.com
+        from_name:
+          type: string
+          nullable: true
+          description: 发件人姓名
+          example: Test User
+        to_address:
+          type: string
+          format: email
+          description: 收件人邮箱
+          example: 1atr64cmly9e5k4z@your-domain.com
+        subject:
+          type: string
+          description: 邮件主题
+          example: Test Email
+        body_text:
+          type: string
+          description: 邮件正文预览（纯文本，最多100字符）
+          example: This is a test email...
+        body_html:
+          type: string
+          description: 邮件正文预览（HTML格式）
+          example: <div>This is a test email...</div>
+        received_at:
+          type: string
+          format: date-time
+          description: 接收时间
+          example: '2025-10-23 17:06:36'
+        is_read:
+          type: integer
+          description: 是否已读（0=未读，1=已读）
+          enum: [0, 1]
+          example: 0
+        size_bytes:
+          type: integer
+          description: 邮件大小（字节）
+          example: 5697
+        attachment_count:
+          type: integer
+          description: 附件数量
+          example: 0
+        has_attachments:
+          type: boolean
+          description: 是否有附件
+          example: false
+
+    EmailDetail:
+      allOf:
+        - $ref: '#/components/schemas/EmailListItem'
+        - type: object
+          properties:
+            headers:
+              type: string
+              description: 邮件头部（JSON 字符串）
+              example: '{"content-type":"multipart/alternative","date":"Fri, 24 Oct 2025 01:06:23 +0800"}'
+            raw_content:
+              type: string
+              description: 邮件原始内容
+              example: 'Received: from mail...'
+            attachments:
+              type: array
+              description: 附件列表
+              items:
+                $ref: '#/components/schemas/Attachment'
+
+    Attachment:
+      type: object
+      required:
+        - id
+        - filename
+        - size
+        - content_type
+        - status
+      properties:
+        id:
+          type: integer
+          description: 附件 ID
+          example: 1
+        filename:
+          type: string
+          description: 文件名
+          example: document.pdf
+        size:
+          type: integer
+          description: 文件大小（字节）
+          example: 102400
+        content_type:
+          type: string
+          description: MIME 类型
+          example: application/pdf
+        status:
+          type: string
+          description: 附件状态
+          example: available
+
+  responses:
+    Unauthorized:
+      description: 认证失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingKey:
+              summary: 缺少 API Key
+              value:
+                success: false
+                error: Missing API key
+                error_code: AUTH_UNAUTHORIZED
+            invalidKey:
+              summary: 无效的 API Key
+              value:
+                success: false
+                error: Invalid API key
+                error_code: AUTH_TOKEN_INVALID
+            expiredKey:
+              summary: API Key 已过期
+              value:
+                success: false
+                error: API key has expired
+                error_code: AUTH_TOKEN_EXPIRED
+
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            noPermission:
+              summary: 缺少必需权限
+              value:
+                success: false
+                error: 'This API key does not have the required permission(s): read'
+                error_code: PERMISSION_DENIED
+
+    MailboxNotFound:
+      description: 邮箱不存在或无权访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Mailbox not found or access denied
+            error_code: MAILBOX_NOT_FOUND
+
+    EmailNotFound:
+      description: 邮件不存在或无权访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Email not found or access denied
+            error_code: EMAIL_NOT_FOUND
+
+    ValidationError:
+      description: 请求参数验证失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Invalid request data
+            error_code: VALIDATION_ERROR
+            details:
+              - field: prefix
+                message: String must contain at most 10 character(s)
+
+    RateLimitExceeded:
+      description: 超过速率限制
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Too many requests
+            error_code: RATE_LIMIT_EXCEEDED
+
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Internal server error
+            error_code: INTERNAL_ERROR

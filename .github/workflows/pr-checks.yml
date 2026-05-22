@@ -1,0 +1,182 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Lint and format check
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            workers/api/package-lock.json
+            workers/email/package-lock.json
+            web/package-lock.json
+
+      - name: Lint API Worker
+        working-directory: ./workers/api
+        run: |
+          npm ci
+          npm run lint --if-present
+
+      - name: Lint Email Worker
+        working-directory: ./workers/email
+        run: |
+          npm ci
+          npm run lint --if-present
+
+      - name: Lint Web App
+        working-directory: ./web
+        run: |
+          npm ci
+          npm run lint --if-present
+
+  # Type checking
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            workers/api/package-lock.json
+            workers/email/package-lock.json
+            web/package-lock.json
+
+      - name: Type check API Worker
+        working-directory: ./workers/api
+        run: |
+          npm ci
+          npm run type-check --if-present
+
+      - name: Type check Email Worker
+        working-directory: ./workers/email
+        run: |
+          npm ci
+          npm run type-check --if-present
+
+      - name: Type check Web App
+        working-directory: ./web
+        run: |
+          npm ci
+          npm run type-check --if-present
+
+  # Security scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            workers/api/package-lock.json
+            workers/email/package-lock.json
+            web/package-lock.json
+
+      - name: Run security audit (API)
+        working-directory: ./workers/api
+        run: npm audit --audit-level=moderate
+
+      - name: Run security audit (Email)
+        working-directory: ./workers/email
+        run: npm audit --audit-level=moderate
+
+      - name: Run security audit (Web)
+        working-directory: ./web
+        run: npm audit --audit-level=moderate
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Bundle size check
+  bundle-size:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            web/package-lock.json
+
+      - name: Build and check bundle size
+        working-directory: ./web
+        run: |
+          npm ci
+          npm run build
+
+          # Check bundle size
+          MAX_SIZE=500000  # 500KB max for main bundle
+          BUNDLE_SIZE=$(stat -c%s dist/assets/index-*.js | head -1)
+
+          echo "Bundle size: $BUNDLE_SIZE bytes"
+
+          if [ $BUNDLE_SIZE -gt $MAX_SIZE ]; then
+            echo "Bundle size exceeds limit ($BUNDLE_SIZE > $MAX_SIZE)"
+            exit 1
+          else
+            echo "Bundle size within limit"
+          fi
+
+  # All checks passed
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, security, bundle-size]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.typecheck.result }}" != "success" ] || \
+             [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.bundle-size.result }}" != "success" ]; then
+            echo "One or more checks failed"
+            exit 1
+          fi
+          echo "All checks passed successfully!"

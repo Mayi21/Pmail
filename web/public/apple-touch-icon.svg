@@ -1,0 +1,21 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="180" height="180" rx="40" fill="#4ECDC4"/>
+
+  <!-- Main envelope body -->
+  <rect x="30" y="55" width="120" height="85" rx="4" fill="#FFFFFF" stroke="#000000" stroke-width="8"/>
+
+  <!-- Envelope back flap - bottom triangles -->
+  <path d="M 30 55 L 90 105 L 30 140 Z" fill="#FFD670" stroke="#000000" stroke-width="8" stroke-linejoin="miter"/>
+  <path d="M 150 55 L 90 105 L 150 140 Z" fill="#FFD670" stroke="#000000" stroke-width="8" stroke-linejoin="miter"/>
+
+  <!-- Envelope top flap -->
+  <path d="M 30 55 L 90 105 L 150 55 Z" fill="#FF6B9D" stroke="#000000" stroke-width="8" stroke-linejoin="miter"/>
+
+  <!-- Decorative elements - small squares for neobrutalism style -->
+  <rect x="145" y="35" width="16" height="16" rx="2" fill="#5FD068" stroke="#000000" stroke-width="4"/>
+  <rect x="25" y="145" width="12" height="12" rx="2" fill="#6BB6FF" stroke="#000000" stroke-width="3"/>
+
+  <!-- Center dot for emphasis -->
+  <circle cx="90" cy="105" r="6" fill="#000000"/>
+</svg>
