@@ -9,30 +9,8 @@ import { jwtAuth } from '../middleware/auth';
 import type { Env } from '../index';
 import { ErrorCode } from '../types';
 import { verifyMailboxOwnership } from '../utils/email';
-import { decryptEmailContent, isEncryptedContent } from '../utils/crypto';
 
 const app = new Hono<{ Bindings: Env }>();
-
-/**
- * Helper function to decrypt and preview email content
- * Decrypts if needed, then returns first 100 characters
- */
-async function decryptAndPreview(content: string | null, encryptionKey: string | undefined): Promise<string> {
-  if (!content) return '';
-
-  try {
-    // Check if content is encrypted
-    if (encryptionKey && isEncryptedContent(content)) {
-      const decrypted = await decryptEmailContent(content, encryptionKey);
-      return decrypted ? decrypted.substring(0, 100) : '';
-    }
-    // If not encrypted, just return preview
-    return content.substring(0, 100);
-  } catch (error) {
-    console.error('Failed to decrypt email preview:', error);
-    return ''; // Return empty on error
-  }
-}
 
 // Shared pagination/search schemas
 const paginationSchema = z.object({
@@ -95,28 +73,23 @@ app.get('/guest/:address', async (c) => {
     WHERE temp_email_id = ? AND deleted_at IS NULL
   `).bind(mailbox.id).first<{ total: number }>();
 
-  // Process emails: decrypt and create preview
-  const processedEmails = await Promise.all(
-    emails.results.map(async (email: any) => {
-      const bodyPreview = await decryptAndPreview(
-        email.body_text || email.body_html,
-        c.env.DATABASE_ENCRYPTION_KEY
-      );
+  // Process emails: create preview
+  const processedEmails = emails.results.map((email: any) => {
+    const bodyPreview = ((email.body_text || email.body_html) || '').substring(0, 100);
 
-      return {
-        id: email.id,
-        from_address: email.from_address,
-        from_name: email.from_name,
-        to_address: email.to_address,
-        subject: email.subject,
-        body_text: bodyPreview,
-        received_at: email.received_at,
-        is_read: email.is_read,
-        size_bytes: email.size_bytes,
-        has_attachments: (email.attachment_count as number) > 0,
-      };
-    })
-  );
+    return {
+      id: email.id,
+      from_address: email.from_address,
+      from_name: email.from_name,
+      to_address: email.to_address,
+      subject: email.subject,
+      body_text: bodyPreview,
+      received_at: email.received_at,
+      is_read: email.is_read,
+      size_bytes: email.size_bytes,
+      has_attachments: (email.attachment_count as number) > 0,
+    };
+  });
 
   return c.json({
     success: true,
@@ -172,28 +145,23 @@ app.get('/:address', jwtAuth, async (c) => {
     WHERE temp_email_id = ? AND deleted_at IS NULL
   `).bind(tempEmailId).first<{ total: number }>();
 
-  // Process emails: decrypt and create preview
-  const processedEmails = await Promise.all(
-    emails.results.map(async (email: any) => {
-      const bodyPreview = await decryptAndPreview(
-        email.body_text || email.body_html,
-        c.env.DATABASE_ENCRYPTION_KEY
-      );
+  // Process emails: create preview
+  const processedEmails = emails.results.map((email: any) => {
+    const bodyPreview = ((email.body_text || email.body_html) || '').substring(0, 100);
 
-      return {
-        id: email.id,
-        from_address: email.from_address,
-        from_name: email.from_name,
-        to_address: email.to_address,
-        subject: email.subject,
-        body_text: bodyPreview,
-        received_at: email.received_at,
-        is_read: email.is_read,
-        size_bytes: email.size_bytes,
-        has_attachments: (email.attachment_count as number) > 0,
-      };
-    })
-  );
+    return {
+      id: email.id,
+      from_address: email.from_address,
+      from_name: email.from_name,
+      to_address: email.to_address,
+      subject: email.subject,
+      body_text: bodyPreview,
+      received_at: email.received_at,
+      is_read: email.is_read,
+      size_bytes: email.size_bytes,
+      has_attachments: (email.attachment_count as number) > 0,
+    };
+  });
 
   return c.json({
     success: true,

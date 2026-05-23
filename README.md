@@ -29,12 +29,8 @@ cp web/.env.example web/.env
 ```bash
 # 在 workers/api/ 下
 wrangler secret put JWT_SECRET                  # 至少 32 字节随机字符串
-wrangler secret put DATABASE_ENCRYPTION_KEY     # openssl rand -hex 32
 wrangler secret put TURNSTILE_SECRET_KEY        # Cloudflare Turnstile 后台获取
 wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET # Linux.do OAuth 后台获取（可选）
-
-# 在 workers/email/ 下
-wrangler secret put DATABASE_ENCRYPTION_KEY     # 与 API 相同的密钥
 ```
 
 ### 4. 初始化数据库 + 部署

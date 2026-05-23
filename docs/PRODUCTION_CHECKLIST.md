@@ -20,7 +20,6 @@ wrangler secret list
 # 当前已配置的 secrets:
 # ✅ TURNSTILE_SECRET_KEY
 # ✅ OAUTH_LINUXDO_CLIENT_SECRET
-# ⚠️ DATABASE_ENCRYPTION_KEY (需要配置 - 见数据保护章节)
 ```
 
 或在 Cloudflare Dashboard 查看: Workers & Pages → 选择 Worker → Settings → Variables → Encrypted
@@ -58,27 +57,6 @@ wrangler secret list
   - 使用 Cloudflare D1 的备份功能
   - 建议: 每日自动备份
   - 保留策略: 至少 7 天
-
-- [x] **实现邮件正文加密** ✅
-  - 状态: 已实现 AES-GCM-256 加密
-  - 实现位置:
-    - 加密工具: `workers/api/src/utils/crypto.ts` 和 `workers/email/src/utils/crypto.ts`
-    - Email Worker 加密逻辑: `workers/email/src/index.ts:172-189`
-    - API Worker 解密逻辑: `workers/api/src/routes/email.ts` 和 `workers/api/src/routes/mailboxEmails.ts`
-  - 部署要求: **必须配置 `DATABASE_ENCRYPTION_KEY` 密钥**
-    ```bash
-    # 生成 256-bit 加密密钥
-    openssl rand -hex 32
-
-    # 配置到 API Worker
-    cd workers/api
-    wrangler secret put DATABASE_ENCRYPTION_KEY
-
-    # 配置到 Email Worker
-    cd workers/email
-    wrangler secret put DATABASE_ENCRYPTION_KEY
-    ```
-  - 注意: 新邮件将自动加密，旧邮件保持明文（兼容处理）
 
 ### 📝 法律合规
 
@@ -341,17 +319,15 @@ wrangler secret list
 ### 已完成 ✅
 1. ✅ 配置 `TURNSTILE_SECRET_KEY` 密钥 - 已通过 `wrangler secret` 配置
 2. ✅ 配置 `OAUTH_LINUXDO_CLIENT_SECRET` 密钥 - 已通过 `wrangler secret` 配置
-3. ✅ 实现邮件正文加密 - 已实现 AES-GCM-256 加密
-4. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
+3. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
 
 ### 待完成 ⏳
-5. [ ] 配置 `DATABASE_ENCRYPTION_KEY` 密钥到 API Worker 和 Email Worker
-6. [ ] 配置 Cloudflare WAF 基础规则
-7. [ ] 从生产环境移除 `localhost` CORS 配置
-8. [ ] 配置 D1 数据库每日备份
-9. [ ] JWT 令牌刷新机制（Access + Refresh）
-10. [ ] 密码重置令牌安全加固（强随机 + 哈希存储 + 一次性 + 绑定 IP）
-11. [ ] 编写服务条款和隐私政策
+4. [ ] 配置 Cloudflare WAF 基础规则
+5. [ ] 从生产环境移除 `localhost` CORS 配置
+6. [ ] 配置 D1 数据库每日备份
+7. [ ] JWT 令牌刷新机制（Access + Refresh）
+8. [ ] 密码重置令牌安全加固（强随机 + 哈希存储 + 一次性 + 绑定 IP）
+9. [ ] 编写服务条款和隐私政策
 12. [ ] 配置至少一个告警（错误率或响应时间）
 13. [ ] 执行一轮安全测试（至少覆盖 SQL 注入、XSS、认证绕过）
 

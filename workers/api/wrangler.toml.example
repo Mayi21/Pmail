@@ -117,9 +117,6 @@ BACKUP_RETENTION_DAYS = "30"  # Retain backups for 30 days
 
 # Secrets (use: wrangler secret put <KEY_NAME>)
 # TURNSTILE_SECRET_KEY - Cloudflare Turnstile verification secret
-# DATABASE_ENCRYPTION_KEY - AES-256 encryption key for email content (required for production)
-#   Generate with: openssl rand -hex 32
-#   Deploy with: wrangler secret put DATABASE_ENCRYPTION_KEY
 # OAUTH_LINUXDO_CLIENT_SECRET - Linux.do OAuth client secret
 # CLOUDFLARE_API_TOKEN - API token with "Email Routing Addresses: Edit" scope
 #   Required only if email forwarding feature is enabled

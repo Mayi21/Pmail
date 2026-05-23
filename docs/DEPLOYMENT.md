@@ -172,32 +172,15 @@ PMail 的敏感信息分两层：
 # 进入 API Worker 目录
 cd workers/api
 
-# 1. 字段级加密密钥（用于邮件正文 AES-256 加密）
-# ⚠️ 一旦设定永不可换！更换会导致历史加密数据全部无法解密。
-# 用 openssl 生成后离线妥善备份（如团队密码管理器）。
-openssl rand -hex 32 > /tmp/db-key.txt
-cat /tmp/db-key.txt | wrangler secret put DATABASE_ENCRYPTION_KEY
-# 用完销毁文件
-rm /tmp/db-key.txt
-
-# 2. Turnstile 后端验证密钥
+# 1. Turnstile 后端验证密钥
 wrangler secret put TURNSTILE_SECRET_KEY
 # 粘贴 Turnstile 控制台的 Secret Key 后回车
 
-# 3. Linux.do OAuth client secret（不用 OAuth 跳过这步）
+# 2. Linux.do OAuth client secret（不用 OAuth 跳过这步）
 wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
-
-# 进入 Email Worker 目录
-cd ../email
-
-# 4. Email Worker 也需要同一份加密密钥（必须与 API 的完全一致）
-wrangler secret put DATABASE_ENCRYPTION_KEY
-# 粘贴上面生成的同一个 hex 字符串
 
 cd ../..
 ```
-
-> **`DATABASE_ENCRYPTION_KEY` 必须两边一致**，否则 Email Worker 写入的加密数据 API Worker 读不出来。
 
 #### 可选 secret
 
@@ -212,11 +195,7 @@ wrangler secret put SENDGRID_API_KEY
 ```bash
 cd workers/api
 wrangler secret list
-# 应该看到 DATABASE_ENCRYPTION_KEY / TURNSTILE_SECRET_KEY / OAUTH_LINUXDO_CLIENT_SECRET
-
-cd ../email
-wrangler secret list
-# 应该看到 DATABASE_ENCRYPTION_KEY
+# 应该看到 TURNSTILE_SECRET_KEY / OAUTH_LINUXDO_CLIENT_SECRET
 ```
 
 ### 3.2 GitHub Secrets（仅 CI 部署需要）
@@ -247,12 +226,9 @@ wrangler secret list
 
 | Secret | 说明 | 如何生成 |
 |---|---|---|
-| `DATABASE_ENCRYPTION_KEY` | D1 字段级加密密钥（32 字节 hex） | `openssl rand -hex 32` |
 | `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile 验证密钥 | Turnstile Dashboard |
 | `OAUTH_LINUXDO_CLIENT_SECRET` | LinuxDo OAuth Client Secret | LinuxDo 应用后台 |
 | `SENDGRID_API_KEY` | SendGrid 出站发信（可选） | SendGrid Dashboard |
-
-> ⚠️ **`DATABASE_ENCRYPTION_KEY` 一经设定不可变更**，更换会导致历史加密数据全部无法解密。
 
 #### 3.2.4 前端构建变量（Vite 编译期注入）
 
@@ -603,12 +579,9 @@ wrangler d1 execute pmail-db --remote --command="SELECT id, address, expires_at 
 1. 本机：`cd workers/api && wrangler secret put XXX`（立即生效，不需要重新部署）
 2. **同步更新 GitHub Secret**，否则下次 CI 部署会把它覆盖回旧值
 
-> ⚠️ `DATABASE_ENCRYPTION_KEY` 例外，**永远不要更换**，否则历史加密数据全部失效。
-
 ### 8.6 🔐 安全注意事项
 
 - **最小权限原则**：`CLOUDFLARE_API_TOKEN` 严格按 [§2.3](#23-创建-cloudflare-api-tokenci-用) 列表授权，不要图省事用 Global API Key。
-- **DATABASE_ENCRYPTION_KEY 一次性**：首次部署前用 `openssl rand -hex 32` 生成并妥善备份（如团队密码管理器）。设置后**永远不要更换**，否则历史加密数据全部失效。
 - **日志脱敏**：workflow 中绝不要 `echo $SECRET_NAME`，GitHub 虽对已知 Secret 做星号掩码，但拼接、Base64 编码或截断后的输出可能绕过掩码。
 - **Secrets 范围隔离**：仅在仓库级配置生产 Secrets，不要放到 Environment 之外的 Variable 里（Variable 不脱敏）。
 - **OIDC 优化方向**：当前用静态 `CLOUDFLARE_API_TOKEN`。后续可切换到 Cloudflare 支持的 OIDC 短期凭证流，消除长期 Token 泄漏风险。
@@ -646,16 +619,11 @@ A：依次排查：
 **Q：前端登录后调 API 报 401**
 A：JWT secret 不一致。本地部署不需要手动初始化 JWT 密钥（首次访问会自动生成），但如果你换了 `KEY_ROTATION_DAYS` 或手动操作过 `JWT_KEYS` KV，可能导致密钥混乱。最简单的修法：Dashboard 清空 `JWT_KEYS` KV namespace，重启一次 API Worker 让它重新生成。
 
-**Q：DATABASE_ENCRYPTION_KEY 设错了/丢了**
-A：**没救**。已加密的邮件数据无法恢复。建议方案：
-- 如果是测试阶段：删除 D1 数据库重建（`wrangler d1 delete pmail-db` 后重跑 bootstrap）
-- 如果生产已运行：只能放弃历史数据，新部署一套实例
-
 **Q：想测试 Email Worker 不想真的发邮件**
 A：`workers/email/wrangler.toml` 暂时把 `name` 改成测试名，本地 `wrangler dev` 启动后用 `curl` 模拟入站。或者注册一个测试域名只挂 Cloudflare、不发对外邮件。
 
 **Q：⚡ CPU 时间超 50ms 报错怎么办**
-A：免费套餐 CPU 时间上限 50ms。常见原因：附件加密慢、邮件解析复杂。可以：
+A：免费套餐 CPU 时间上限 50ms。常见原因：邮件解析复杂、附件多。可以：
 - 升级 Workers 付费套餐（$5/月，CPU 时间 30 秒）
 - 把附件处理拆到 Queue 异步执行（需要代码改造）
 

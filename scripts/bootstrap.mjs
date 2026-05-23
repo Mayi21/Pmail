@@ -417,10 +417,8 @@ async function main() {
   log(style('\nNext steps:', 'bold'));
   log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS / OAUTH_LINUXDO_CLIENT_ID', 'cyan')} in .env, then re-run to fill [vars]`);
   log(`  2. Set worker secrets:`);
-  log(`       ${style('cd workers/api  && npx wrangler secret put DATABASE_ENCRYPTION_KEY', 'cyan')}`);
   log(`       ${style('cd workers/api  && npx wrangler secret put TURNSTILE_SECRET_KEY', 'cyan')}`);
   log(`       ${style('cd workers/api  && npx wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET', 'cyan')}`);
-  log(`       ${style('cd workers/email && npx wrangler secret put DATABASE_ENCRYPTION_KEY', 'cyan')}`);
   log(`  3. Configure GitHub Secrets (see docs/DEPLOYMENT.md §3.2) and:`);
   log(`       ${style('git push origin main', 'cyan')}    # GitHub Actions deploys`);
 }

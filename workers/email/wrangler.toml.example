@@ -52,11 +52,6 @@ MAX_EMAIL_SIZE = "26214400"
 MAX_ATTACHMENTS = "10"
 MAX_ATTACHMENT_SIZE = "10485760"
 
-# Secrets (use: wrangler secret put <KEY_NAME>)
-# DATABASE_ENCRYPTION_KEY - AES-256 encryption key for email content (required for production)
-#   Generate with: openssl rand -hex 32
-#   Deploy with: wrangler secret put DATABASE_ENCRYPTION_KEY
-
 # Email routing configuration
 # Configure this in Cloudflare Dashboard under Email Routing
 # Route pattern: *@${DOMAIN} -> this worker

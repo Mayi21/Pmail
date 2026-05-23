@@ -62,9 +62,6 @@ export interface Env {
   // Turnstile (secret key)
   TURNSTILE_SECRET_KEY: string;
 
-  // Email content encryption
-  DATABASE_ENCRYPTION_KEY?: string;
-
   // Guest mode settings
   GUEST_MAILBOX_TTL: string;
   GUEST_CLEANUP_RETENTION: string;

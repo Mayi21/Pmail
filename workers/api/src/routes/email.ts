@@ -9,7 +9,6 @@ import { jwtAuth } from '../middleware/auth';
 import type { Env } from '../index';
 import { ErrorCode } from '../types';
 import { sanitizeHtml, verifyEmailOwnership } from '../utils/email';
-import { decryptEmailContent, isEncryptedContent } from '../utils/crypto';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -17,36 +16,6 @@ const batchDeleteSchema = z.object({
   ids: z.array(z.number()).min(1).max(100),
 });
 
-/**
- * Helper function to decrypt email content fields
- */
-async function decryptEmailFields(email: any, encryptionKey: string | undefined): Promise<any> {
-  if (!email || !encryptionKey) {
-    return email;
-  }
-
-  try {
-    // Decrypt body_text if encrypted
-    if (email.body_text && isEncryptedContent(email.body_text as string)) {
-      email.body_text = await decryptEmailContent(email.body_text as string, encryptionKey);
-    }
-
-    // Decrypt body_html if encrypted
-    if (email.body_html && isEncryptedContent(email.body_html as string)) {
-      email.body_html = await decryptEmailContent(email.body_html as string, encryptionKey);
-    }
-
-    // Decrypt raw_content if encrypted
-    if (email.raw_content && isEncryptedContent(email.raw_content as string)) {
-      email.raw_content = await decryptEmailContent(email.raw_content as string, encryptionKey);
-    }
-  } catch (error) {
-    console.error('Failed to decrypt email content:', error);
-    // Return email as-is if decryption fails
-  }
-
-  return email;
-}
 
 /**
  * GET /api/email/guest/:id
@@ -84,8 +53,6 @@ app.get('/guest/:id', async (c) => {
     }, 404);
   }
 
-  // Decrypt email content if encrypted
-  await decryptEmailFields(email, c.env.DATABASE_ENCRYPTION_KEY);
 
   if (email.body_html) {
     email.body_html = sanitizeHtml(email.body_html as string);
@@ -155,8 +122,6 @@ app.get('/:id', jwtAuth, async (c) => {
     }, 404);
   }
 
-  // Decrypt email content if encrypted
-  await decryptEmailFields(email, c.env.DATABASE_ENCRYPTION_KEY);
 
   if (email.body_html) {
     email.body_html = sanitizeHtml(email.body_html as string);
@@ -342,8 +307,6 @@ app.get('/:id/raw', jwtAuth, async (c) => {
     SELECT headers, raw_content FROM emails WHERE id = ?
   `).bind(emailId).first();
 
-  // Decrypt raw_content if encrypted
-  await decryptEmailFields(email, c.env.DATABASE_ENCRYPTION_KEY);
 
   return c.json({
     success: true,

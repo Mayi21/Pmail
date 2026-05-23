@@ -5,7 +5,6 @@
 
 import type { ForwardableEmailMessage } from '@cloudflare/workers-types';
 import PostalMime from 'postal-mime';
-import { encryptEmailContent } from './utils/crypto';
 
 // Type definitions
 export interface Env {
@@ -18,7 +17,6 @@ export interface Env {
   MAX_EMAIL_SIZE: string;
   MAX_ATTACHMENTS: string;
   MAX_ATTACHMENT_SIZE: string;
-  DATABASE_ENCRYPTION_KEY?: string;  // Optional encryption key for email content
 }
 
 interface ParsedEmail {
@@ -143,24 +141,9 @@ async function processEmailSync(message: ForwardableEmailMessage, env: Env): Pro
     return;
   }
 
-  // Encrypt email content if encryption key is configured
   let bodyText = parsedEmail.text || null;
   let bodyHtml = parsedEmail.html || null;
   let rawContentToStore = rawContent;
-
-  if (env.DATABASE_ENCRYPTION_KEY) {
-    try {
-      bodyText = await encryptEmailContent(parsedEmail.text, env.DATABASE_ENCRYPTION_KEY);
-      bodyHtml = await encryptEmailContent(parsedEmail.html, env.DATABASE_ENCRYPTION_KEY);
-      rawContentToStore = await encryptEmailContent(rawContent, env.DATABASE_ENCRYPTION_KEY) || rawContent;
-      console.log('Email content encrypted successfully');
-    } catch (error) {
-      console.error('Failed to encrypt email content:', error);
-      // Continue without encryption if it fails (fallback to plaintext)
-    }
-  } else {
-    console.warn('DATABASE_ENCRYPTION_KEY not configured - storing email in plaintext');
-  }
 
   // Start transaction for email and attachments
   const emailResult = await env.DB.prepare(`
