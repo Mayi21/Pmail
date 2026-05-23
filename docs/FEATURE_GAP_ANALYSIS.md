@@ -5,7 +5,7 @@
 
 ## 背景
 
-项目当前已具备完整的注册/登录、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook、Turnstile、JWT 轮换等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
+项目当前已具备完整的注册/登录、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook、Turnstile 等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
 
 与同类公开服务（temp-mail.org、mail.tm、SimpleLogin、AnonAddy、addy.io）对照，仍存在若干"行业默认有但本项目没有"的能力空缺。本文档聚焦在 `PRODUCTION_CHECKLIST.md` **没覆盖但用户实际会期待**的功能差距。
 
@@ -13,7 +13,7 @@
 
 ## 1. 现状边界
 
-**已实现且强项**：catch-all 收件、AES-GCM 加密邮件体、tier+兑换码、JWT 自动轮换、HMAC 签名 webhook、备份+恢复、guest mode、永久邮箱（NULL expires_at）。
+**已实现且强项**：catch-all 收件、AES-GCM 加密邮件体、tier+兑换码、HMAC 签名 webhook、备份+恢复、guest mode、永久邮箱（NULL expires_at）。
 
 **已在其他文档中规划（不在本文重复）**：MFA、refresh token、CSP nonce、CSRF、session 管理、refresh-token 化的 reset token、WAF、Sentry、ToS/Privacy、queue 实接、R2 lifecycle、staging env、压测、OWASP scan、admin IP 白名单。
 

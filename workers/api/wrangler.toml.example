@@ -28,12 +28,10 @@ usage_model = "standard"
 workers_dev = true
 
 # Triggers - Cron jobs for scheduled tasks
-# JWT key rotation runs inside the daily backup handler when the day-of-month
-# matches the rotation cadence, so no dedicated cron is needed.
 [triggers]
 crons = [
   "0 * * * *",        # Every hour - Clean expired data + tier expiration check
-  "0 2 * * *"         # Every day at 2:00 AM UTC - DB backup + JWT key rotation (date-gated)
+  "0 2 * * *"         # Every day at 2:00 AM UTC - DB backup
 ]
 
 # D1 Database binding
@@ -49,11 +47,6 @@ binding = "R2"
 bucket_name = "${R2_BUCKET}"
 
 # KV Namespaces
-# JWT_KEYS - versioned JWT signing keys (kid -> key JSON, plus active-keys index)
-[[kv_namespaces]]
-binding = "JWT_KEYS"
-id = "${KV_JWT_KEYS_ID}"
-
 # CACHE - shared cache for all transient lookups, namespaced by key prefix:
 #   reset:*        password reset tokens
 #   email_valid:*  validated recipient address cache (only positive hits)
@@ -80,8 +73,6 @@ head_sampling_rate = 0.1
 DOMAIN = "${DOMAIN}"
 FRONTEND_URL = "https://app.${DOMAIN}"
 ALLOWED_ORIGINS = "${ALLOWED_ORIGINS}"
-KEY_ROTATION_DAYS = "30"
-KEY_GRACE_PERIOD_DAYS = "7"
 ENABLE_AUDIT_LOG = "true"
 DEFAULT_MAILBOX_TTL = "3600"
 MAX_MAILBOX_TTL = "86400"
@@ -111,6 +102,8 @@ BACKUP_ENABLED = "true"
 BACKUP_RETENTION_DAYS = "30"  # Retain backups for 30 days
 
 # Secrets (use: wrangler secret put <KEY_NAME>)
+# JWT_SECRET - JWT signing key (any random string, at least 32 chars)
+#   Generate with: openssl rand -base64 32
 # TURNSTILE_SECRET_KEY - Cloudflare Turnstile verification secret
 # CLOUDFLARE_API_TOKEN - API token with "Email Routing Addresses: Edit" scope
 #   Required only if email forwarding feature is enabled

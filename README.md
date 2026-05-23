@@ -10,7 +10,7 @@
 
 - **D1 Database**：用于存储用户、邮箱、邮件元数据
 - **R2 Bucket**：单桶，附件用 `attachments/` 前缀、数据库备份用 `backups/` 前缀
-- **KV Namespaces**：`JWT_KEYS`（版本化 JWT 签名密钥）+ `CACHE`（共享缓存，按前缀复用：`reset:*` / `email_valid:*` / `settings:*`）
+- **KV Namespace**：`CACHE`（共享缓存，按前缀复用：`reset:*` / `email_valid:*` / `settings:*`）
 
 ### 2. 拷贝并填写配置文件
 
@@ -81,7 +81,7 @@ cd ../../web && npm install && npm run build
 
 ### 安全特性
 - bcrypt 密码加密
-- JWT 无状态认证（自动密钥轮换，30 天周期）
+- JWT 无状态认证（HS256，静态 `JWT_SECRET`）
 - Turnstile CAPTCHA 验证
 - 登录锁定（5 次失败 = 15 分钟锁定）
 - 分级速率限制
@@ -195,7 +195,6 @@ wrangler d1 execute temp-email-db --file=./schema.sql
 wrangler r2 bucket create temp-email-attachments
 
 # KV 命名空间
-wrangler kv namespace create "JWT_KEYS"
 wrangler kv namespace create "CACHE"
 ```
 
@@ -203,27 +202,11 @@ wrangler kv namespace create "CACHE"
 
 将上述步骤返回的资源 ID 填入 `workers/api/wrangler.toml` 和 `workers/email/wrangler.toml`。
 
-### 3. 初始化 JWT 密钥
+### 3. 配置 JWT 密钥
 
 ```bash
-export INITIAL_KEY=$(openssl rand -base64 32)
-export KEY_ID="key-$(date +%s)"
-
-cat > initial-key.json <<EOF
-{
-  "kid": "${KEY_ID}",
-  "secret": "${INITIAL_KEY}",
-  "status": "active",
-  "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "expiresAt": "$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)"
-}
-EOF
-
-wrangler kv key put --namespace-id=YOUR_JWT_KEYS_NAMESPACE_ID \
-  "${KEY_ID}" --path=initial-key.json
-wrangler kv key put --namespace-id=YOUR_JWT_KEYS_NAMESPACE_ID \
-  "active-keys" --value="[\"${KEY_ID}\"]"
-rm initial-key.json
+cd workers/api
+wrangler secret put JWT_SECRET   # 输入至少 32 字节的随机字符串
 ```
 
 ### 4. 部署
@@ -261,7 +244,6 @@ wrangler secret put TURNSTILE_SECRET_KEY
 DOMAIN = "yourdomain.com"
 FRONTEND_URL = "https://your-app.pages.dev"
 ALLOWED_ORIGINS = "https://your-app.pages.dev"
-KEY_ROTATION_DAYS = "30"
 GUEST_MAILBOX_TTL = "7200"
 ```
 
@@ -274,15 +256,15 @@ GUEST_MAILBOX_TTL = "7200"
 | `DOMAIN` | 邮件域名 | wrangler.toml `[vars]` |
 | `FRONTEND_URL` | 前端部署 URL | wrangler.toml `[vars]` |
 | `ALLOWED_ORIGINS` | CORS 允许源（逗号分隔） | wrangler.toml `[vars]` |
-| `KEY_ROTATION_DAYS` | JWT 密钥轮换周期（默认 30） | wrangler.toml `[vars]` |
 | `GUEST_MAILBOX_TTL` | 游客邮箱有效期秒数（默认 7200） | wrangler.toml `[vars]` |
+| `JWT_SECRET` | JWT 签名密钥（HS256） | `wrangler secret put` |
 | `TURNSTILE_SECRET_KEY` | Turnstile 验证密钥 | `wrangler secret put` |
 
 ### 定时任务
 
 配置在 `workers/api/wrangler.toml`：
 - `0 * * * *` — 每小时清理过期邮箱 + 检查 tier 过期
-- `0 2 * * *` — 每日 D1 备份到 R2 `backups/` 前缀；scheduled handler 内按 `KEY_ROTATION_DAYS` 判定是否轮换 JWT 密钥
+- `0 2 * * *` — 每日 D1 备份到 R2 `backups/` 前缀
 
 ### 应用限制
 
@@ -307,7 +289,7 @@ GUEST_MAILBOX_TTL = "7200"
 
 ## 📚 更多文档
 
-- [部署指南](./docs/DEPLOYMENT.md) — 本地一键部署 + GitHub Actions 自动部署
+- [部署指南](./docs/DEPLOYMENT.md) — 资源初始化（bootstrap.mjs）+ GitHub Actions 自动部署
 - [API 文档与实现原理](./docs/ARCHITECTURE_AND_API.md) — 完整 API 接口、架构原理、实现细节
 - [数据库结构](./schema.sql)
 - [上线检查清单](./docs/PRODUCTION_CHECKLIST.md) — 含安全整改路线图

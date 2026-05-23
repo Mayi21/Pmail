@@ -575,20 +575,9 @@ users → temp_emails → emails → attachments
 
 所有查询**必须**包含 `user_id` 条件，确保用户只能操作自己的数据。
 
-### JWT 密钥轮换机制
+### JWT 签名密钥
 
-**密钥生命周期**：
-```
-active（活跃）→ retired（退休）→ deleted（删除）
-   ↓                ↓                ↓
-签发+验证        仅验证           不可用
-(30天)          (7天宽限期)       (永久删除)
-```
-
-Token 验证流程：
-```
-接收 Token → 解析 Header 获取 kid → 查找对应密钥 → 检查密钥状态 → 验证签名
-```
+JWT 使用单一静态密钥 `JWT_SECRET`（HS256），通过 `wrangler secret put JWT_SECRET` 设置。签发与验证逻辑见 `workers/api/src/services/jwt.ts`。
 
 ### 密码重置流程
 

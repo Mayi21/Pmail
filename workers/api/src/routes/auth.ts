@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { JWTKeyManager } from '../services/jwtKeyManager';
+import { signToken } from '../services/jwt';
 import { EmailService } from '../services/emailService';
 import { TurnstileService } from '../services/turnstileService';
 import { getBooleanSetting } from '../services/settingsService';
@@ -247,8 +247,7 @@ app.post('/login', async (c) => {
     await clearLoginFailures(c.env.DB, validated.username, 'username');
 
     // 6. Generate JWT token
-    const keyManager = new JWTKeyManager(c.env);
-    const token = await keyManager.signToken({
+    const token = await signToken(c.env, {
       sub: String(user.id),
       username: user.username,
     });

@@ -354,7 +354,7 @@ WHERE user_id = 123
 [triggers]
 crons = [
   "0 * * * *",        # 每小时执行一次清理
-  "0 0 */30 * *"      # 每 30 天执行 JWT 密钥轮换
+  "0 2 * * *"         # 每日 D1 备份到 R2
 ]
 ```
 
@@ -378,8 +378,9 @@ async scheduled(
       await checkExpiredTiers(env.DB);
       break;
 
-    case '0 0 */30 * *':  // 每 30 天
-      await rotateJWTKeys(env);
+    case '0 2 * * *':  // 每日 D1 备份
+      await performDatabaseBackup(env);
+      await cleanupOldBackups(env);
       break;
   }
 }
@@ -1070,8 +1071,8 @@ await getUserMailboxStats(userId, db); // 内部会重算并更新
 [triggers]
 crons = [
   "0 * * * *",        # 每小时 - 清理过期数据
-  "0 3 * * *",        # 🆕 每天凌晨3点 - 校验统计数据
-  "0 0 */30 * *"      # 每 30 天 - JWT 密钥轮换
+  "0 2 * * *",        # 每日 - D1 备份到 R2
+  "0 3 * * *"         # 每天凌晨3点 - 校验统计数据
 ]
 ```
 

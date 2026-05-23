@@ -6,7 +6,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../index';
 import { getRateLimitStats } from '../middleware/rateLimit';
-import { JWTKeyManager } from '../services/jwtKeyManager';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -115,9 +114,8 @@ app.get('/ready', async (c) => {
 app.get('/cache-stats', async (c) => {
   return c.json({
     rate_limit_cache: getRateLimitStats(),
-    jwt_key_cache: JWTKeyManager.getCacheStats(),
     timestamp: new Date().toISOString(),
-    note: 'These caches reduce KV reads by ~90% for free tier optimization',
+    note: 'Cache reduces KV reads on free tier',
   });
 });
 

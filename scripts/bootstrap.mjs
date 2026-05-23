@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -22,7 +23,7 @@ const D1_NAME = 'pmail-db';
 const R2_BUCKETS = [
   { key: 'storage', baseName: 'pmail-storage' },
 ];
-const KV_NAMESPACES = ['JWT_KEYS', 'CACHE'];
+const KV_NAMESPACES = ['CACHE'];
 const PAGES_PROJECT = 'pmail-web';
 const PAGES_PRODUCTION_BRANCH = 'main';
 
@@ -46,7 +47,8 @@ function parseCli() {
     log(`Usage: node scripts/bootstrap.mjs [options]
 
 Creates Cloudflare D1, R2, KV, and Pages resources for PMail (idempotent),
-then renders wrangler.toml / .env with the resulting IDs.
+renders wrangler.toml / .env with the resulting IDs, and generates &
+pushes JWT_SECRET via wrangler secret put (skipped if already configured).
 
 This script only handles resource provisioning and config rendering.
 Deployment (migrations + wrangler deploy) is delegated to GitHub Actions
@@ -331,7 +333,6 @@ function buildLegacyMap(state) {
     'your-database-name':          state.d1.name,
     'your-d1-database-id':         state.d1.id,
     'your-attachments-bucket':     state.r2.storage,
-    'your-jwt-keys-kv-id':         state.kv.JWT_KEYS,
     'your-cache-kv-id':            state.kv.CACHE,
   };
 }
@@ -341,7 +342,6 @@ function buildEnvsubstMap(state, userEnv) {
     '${D1_DATABASE_NAME}':       state.d1.name,
     '${D1_DATABASE_ID}':         state.d1.id,
     '${R2_BUCKET}':              state.r2.storage,
-    '${KV_JWT_KEYS_ID}':         state.kv.JWT_KEYS,
     '${KV_CACHE_ID}':            state.kv.CACHE,
   };
   for (const k of ['DOMAIN', 'ALLOWED_ORIGINS']) {
@@ -381,6 +381,123 @@ async function renderEnv(state) {
   return dst;
 }
 
+function jwtSecretAlreadySet(wrangler, accountId, workerDir) {
+  const r = spawnSync(wrangler, withAccount(['secret', 'list'], accountId), {
+    cwd: workerDir,
+    encoding: 'utf8',
+    env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+  });
+  if (r.status !== 0) return false;
+  try {
+    const parsed = jsonFromStdout(r.stdout);
+    const list = Array.isArray(parsed) ? parsed : (parsed.secrets ?? []);
+    return list.some(s => (s.name || s.Name) === 'JWT_SECRET');
+  } catch {
+    return /\bJWT_SECRET\b/.test(r.stdout);
+  }
+}
+
+function putWranglerSecret(wrangler, accountId, workerDir, name, value) {
+  const r = spawnSync(wrangler, withAccount(['secret', 'put', name], accountId), {
+    cwd: workerDir,
+    input: value,
+    encoding: 'utf8',
+    env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+  });
+  if (r.status !== 0) throw new Error(`wrangler secret put ${name} failed: ${r.stderr || r.stdout}`);
+}
+
+async function ensureJwtSecret(wrangler, accountId) {
+  const workerDir = join(REPO, 'workers/api');
+  if (jwtSecretAlreadySet(wrangler, accountId, workerDir)) {
+    log(`  ${style('·', 'gray')} reuse JWT_SECRET ${style('(already configured)', 'gray')}`);
+    return;
+  }
+  process.stdout.write(`  ${style('+', 'green')} generate & set JWT_SECRET... `);
+  const value = randomBytes(32).toString('base64');
+  putWranglerSecret(wrangler, accountId, workerDir, 'JWT_SECRET', value);
+  log(style('done', 'green'));
+}
+
+async function cfApi(token, method, path, body) {
+  const url = `https://api.cloudflare.com/client/v4${path}`;
+  const init = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  const res = await fetch(url, init);
+  let json;
+  try { json = await res.json(); } catch {
+    throw new Error(`Cloudflare API ${method} ${path} returned non-JSON (HTTP ${res.status})`);
+  }
+  return { status: res.status, json };
+}
+
+function cfErrors(json) {
+  if (!json || !Array.isArray(json.errors)) return '';
+  return json.errors.map(e => `[${e.code}] ${e.message}`).join('; ');
+}
+
+async function ensureEmailRouting(userEnv) {
+  log(style('\n▸ Configuring Email Routing', 'bold', 'blue'));
+
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!token) {
+    warn('Email Routing 自动启用需要 CLOUDFLARE_API_TOKEN 环境变量，跳过。请通过 Dashboard 手动启用，或导出 token 后重跑');
+    return;
+  }
+  const domain = userEnv.DOMAIN;
+  if (!domain) {
+    warn('.env 中没有 DOMAIN，跳过 Email Routing 启用。请填 DOMAIN 后重跑 bootstrap');
+    return;
+  }
+
+  // 1) Resolve zone_id by domain
+  const zoneRes = await cfApi(token, 'GET', `/zones?name=${encodeURIComponent(domain)}`);
+  if (!zoneRes.json?.success) {
+    die(`Cloudflare API GET /zones?name=${domain} failed: ${cfErrors(zoneRes.json) || `HTTP ${zoneRes.status}`}`);
+  }
+  const zones = zoneRes.json.result || [];
+  if (zones.length === 0) {
+    die(`Domain "${domain}" 不在当前 Cloudflare account 的 zone 列表中。请先在 Cloudflare Dashboard 添加该 domain，或检查 CLOUDFLARE_API_TOKEN 是否对应正确 account`);
+  }
+  const zoneId = zones[0].id;
+  log(`  ${style('·', 'gray')} zone ${domain} ${style(zoneId, 'gray')}`);
+
+  // 2) Check current Email Routing status
+  const statusRes = await cfApi(token, 'GET', `/zones/${zoneId}/email/routing`);
+  // 404 or status='unconfigured' means not enabled yet — proceed to enable.
+  if (statusRes.status !== 404 && statusRes.json?.success) {
+    const result = statusRes.json.result || {};
+    if (result.status === 'ready' || result.enabled === true) {
+      log(`  ${style('·', 'gray')} reuse Email Routing ${style('(already enabled)', 'gray')}`);
+      return;
+    }
+  }
+
+  // 3) Enable Email Routing (also provisions MX + SPF records)
+  process.stdout.write(`  ${style('+', 'green')} enable Email Routing on ${domain}... `);
+  const enableRes = await cfApi(token, 'POST', `/zones/${zoneId}/email/routing/enable`, {});
+  if (!enableRes.json?.success) {
+    log(style('failed', 'red'));
+    const errs = enableRes.json?.errors || [];
+    const errStr = cfErrors(enableRes.json) || `HTTP ${enableRes.status}`;
+    const isConflict = errs.some(e => {
+      const m = (e.message || '').toLowerCase();
+      return m.includes('mx') || m.includes('conflict') || m.includes('existing') || m.includes('already');
+    });
+    if (isConflict) {
+      die(`Email Routing 启用失败：${errStr}\n  该 domain 存在冲突的 MX 记录。请前往 Cloudflare Dashboard → DNS 清理已有 MX 记录后重试。`);
+    }
+    throw new Error(`Email Routing enable failed for ${domain}: ${errStr}`);
+  }
+  log(style('done', 'green'));
+}
+
 async function main() {
   const args = parseCli();
   log(style('PMail Bootstrap', 'bold', 'cyan'));
@@ -413,13 +530,19 @@ async function main() {
     log(style('     → set these in .env and re-run, or edit wrangler.toml directly.', 'gray'));
   }
 
+  log(style('\n▸ Configuring worker secrets', 'bold', 'blue'));
+  await ensureJwtSecret(wrangler, accountId);
+
+  await ensureEmailRouting(userEnv);
+
   log(style('\n✓ Bootstrap complete.', 'bold', 'green'));
   log(style('\nNext steps:', 'bold'));
   log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS', 'cyan')} in .env, then re-run to fill [vars]`);
-  log(`  2. Set worker secrets:`);
+  log(`  2. Set worker secrets (only if you enable Turnstile / outbound mail):`);
   log(`       ${style('cd workers/api  && npx wrangler secret put TURNSTILE_SECRET_KEY', 'cyan')}`);
-  log(`  3. Configure GitHub Secrets (see docs/DEPLOYMENT.md §3.2) and:`);
-  log(`       ${style('git push origin main', 'cyan')}    # GitHub Actions deploys`);
+  log(`  3. Deployment is handled exclusively by GitHub Actions. Configure`);
+  log(`     GitHub Secrets (see docs/DEPLOYMENT.md §3.2) then:`);
+  log(`       ${style('git push origin main', 'cyan')}    # triggers deploy`);
 }
 
 main().catch(err => die(err.stack || err.message || String(err)));

@@ -24,7 +24,6 @@ jobs:
       D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
       D1_DATABASE_NAME: ${{ secrets.D1_DATABASE_NAME }}
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
-      KV_JWT_KEYS_ID: ${{ secrets.KV_JWT_KEYS_ID }}
       KV_CACHE_ID: ${{ secrets.KV_CACHE_ID }}
       DOMAIN: ${{ secrets.DOMAIN }}
       ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
@@ -101,6 +100,42 @@ jobs:
       - name: Deploy Email Worker
         working-directory: workers/email
         run: npx wrangler deploy
+
+      - name: Bind catch-all to Email Worker
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4"
+          AUTH="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+
+          # 1. Look up zone_id by DOMAIN
+          ZONE_RESP=$(curl -fsS -H "$AUTH" "$API/zones?name=${DOMAIN}")
+          ZONE_ID=$(echo "$ZONE_RESP" | jq -r '.result[0].id')
+          if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" = "null" ]; then
+            echo "::error::Could not find Cloudflare zone for DOMAIN=${DOMAIN}. Check that the domain is on this account."
+            echo "$ZONE_RESP"
+            exit 1
+          fi
+          echo "Zone ID: $ZONE_ID"
+
+          # 2. Bind catch-all rule to pmail-receiver Worker
+          PUT_RESP=$(curl -fsS -X PUT \
+            -H "$AUTH" \
+            -H "Content-Type: application/json" \
+            "$API/zones/${ZONE_ID}/email/routing/rules/catch_all" \
+            -d '{
+              "name": "PMail catch-all",
+              "enabled": true,
+              "matchers": [{ "type": "all" }],
+              "actions": [{ "type": "worker", "value": ["pmail-receiver"] }]
+            }')
+
+          SUCCESS=$(echo "$PUT_RESP" | jq -r '.success')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to bind catch-all. CLOUDFLARE_API_TOKEN may need 'Zone:Email Routing:Edit' permission."
+            echo "$PUT_RESP" | jq .
+            exit 1
+          fi
+          echo "✓ catch-all rule bound to pmail-receiver Worker"
 
       - name: Build Web frontend
         working-directory: web

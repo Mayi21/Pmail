@@ -43,7 +43,7 @@ wrangler secret list
   - 当前: 仅使用 7 天过期的访问令牌，无 Refresh Token
   - 风险: 令牌被盗后长期有效，无法远程撤销
   - 方案: 双令牌机制（Access Token 15 分钟 + Refresh Token 30 天），启用 `sessions` 表，新增 `/api/auth/refresh` 端点
-  - 位置: `workers/api/src/services/jwtKeyManager.ts:150`
+  - 位置: `workers/api/src/services/jwt.ts`
 
 - [ ] **密码重置令牌安全加固**
   - 当前: 使用 `crypto.randomUUID()` 生成令牌，明文存储，无 IP 绑定
@@ -402,7 +402,6 @@ wrangler secret list
 - [ ] **加密验证**
   - [ ] 数据库中邮件内容已加密
   - [ ] 解密功能正常
-  - [ ] 密钥轮换不影响旧数据
   - [ ] R2 附件加密（如启用）
 
 - [ ] **敏感数据处理**
@@ -492,7 +491,7 @@ wrangler secret list
 以下重要项目已经完成，可以放心使用：
 
 ### 🔐 安全与认证
-- ✅ JWT 密钥轮换机制（每 30 天自动轮换）
+- ✅ JWT 签名（单一静态密钥 `JWT_SECRET`，HS256）
 - ✅ 管理员端点保护（requireAdmin 中间件）
 - ✅ 速率限制（分钟级 + 每日限制）
 - ✅ 登录失败锁定（5 次失败 = 15 分钟锁定）
@@ -506,7 +505,7 @@ wrangler secret list
 - ✅ D1 数据库结构（完整的 schema.sql + 17+ 索引）
 - ✅ KV 命名空间（7 个 namespaces 全部配置）
 - ✅ R2 存储桶（附件存储）
-- ✅ Cron 定时任务（每小时清理 + 每 30 天密钥轮换）
+- ✅ Cron 定时任务（每小时清理 + 每日 D1 备份）
 - ✅ Observability 启用（10% 采样率）
 
 ### 📊 监控与日志

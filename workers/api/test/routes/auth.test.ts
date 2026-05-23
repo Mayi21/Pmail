@@ -94,27 +94,6 @@ describe('Auth Routes', () => {
         password_hash: hashedPassword,
       });
 
-      // Mock JWT key for token generation
-      mockEnv.JWT_KEYS.list.mockResolvedValueOnce({
-        keys: [
-          {
-            name: 'jwt_key_1',
-            metadata: {
-              status: 'active',
-              created_at: new Date().toISOString(),
-            },
-          },
-        ],
-      });
-
-      mockEnv.JWT_KEYS.get.mockResolvedValueOnce(
-        JSON.stringify({
-          id: 'key1',
-          key: 'test-secret-key-at-least-32-characters-long',
-          status: 'active',
-        })
-      );
-
       const request = createMockRequest('http://localhost/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({

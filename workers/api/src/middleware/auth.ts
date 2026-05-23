@@ -5,7 +5,7 @@
  */
 
 import { Context, Next } from 'hono';
-import { JWTKeyManager } from '../services/jwtKeyManager';
+import { verifyToken } from '../services/jwt';
 import type { Env } from '../index';
 import { ErrorCode } from '../types';
 import { preserveCorsHeaders } from './error';
@@ -34,8 +34,7 @@ export async function jwtAuth(c: Context<{ Bindings: Env }>, next: Next) {
   const token = authHeader.substring(7);
 
   try {
-    const keyManager = new JWTKeyManager(c.env);
-    const payload = await keyManager.verifyToken(token);
+    const payload = await verifyToken(c.env, token);
 
     // Set user context
     c.set('user_id', parseInt(payload.sub));

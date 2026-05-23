@@ -37,7 +37,6 @@ import domainsRoutes from './routes/domains';
 
 // Import scheduled tasks
 import { cleanupExpiredData } from './services/cleanup';
-import { rotateJWTKeys } from './services/jwtKeyManager';
 import { checkExpiredTiers } from './services/tierExpirationService';
 import { cleanupOldBackups, performDatabaseBackup } from './services/databaseBackup';
 
@@ -45,15 +44,13 @@ import { cleanupOldBackups, performDatabaseBackup } from './services/databaseBac
 export interface Env {
   DB: D1Database;
   R2: R2Bucket;
-  JWT_KEYS: KVNamespace;
   CACHE: KVNamespace;
 
   // Environment variables
   DOMAIN: string;
   FRONTEND_URL: string;
   ALLOWED_ORIGINS: string;
-  KEY_ROTATION_DAYS: string;
-  KEY_GRACE_PERIOD_DAYS: string;
+  JWT_SECRET: string;  // JWT 签名密钥（wrangler secret）
   ENABLE_AUDIT_LOG: string;
   MAX_MAILBOXES_PER_USER: string;
   DEFAULT_MAILBOX_TTL: string;
@@ -240,17 +237,6 @@ export default {
           console.error('Error during database backup:', error);
         }
 
-        // JWT key rotation gated by KEY_ROTATION_DAYS (replaces the dedicated `0 0 */30 * *` cron).
-        const rotationDays = Number.parseInt(env.KEY_ROTATION_DAYS, 10) || 30;
-        const dayOfMonth = new Date(event.scheduledTime).getUTCDate();
-        if (dayOfMonth % rotationDays === 1) {
-          console.log(`Running JWT key rotation (day ${dayOfMonth} matches cadence ${rotationDays})...`);
-          try {
-            await rotateJWTKeys(env);
-          } catch (error) {
-            console.error('Error during JWT key rotation:', error);
-          }
-        }
         break;
 
       default:
