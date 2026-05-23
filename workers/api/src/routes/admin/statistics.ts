@@ -119,19 +119,6 @@ app.get('/', async (c) => {
       WHERE redeemed_at >= datetime('now', '-1 day')
     `).first<{ redemptions_24h: number }>();
 
-    // API 密钥统计
-    const apiKeyStats = await c.env.DB.prepare(`
-      SELECT
-        COUNT(*) as total_api_keys,
-        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_api_keys,
-        COUNT(DISTINCT user_id) as users_with_api_keys
-      FROM api_keys
-    `).first<{
-      total_api_keys: number;
-      active_api_keys: number;
-      users_with_api_keys: number;
-    }>();
-
     // 存储使用统计（附件）
     const storageStats = await c.env.DB.prepare(`
       SELECT
@@ -192,11 +179,6 @@ app.get('/', async (c) => {
             total_redemptions: redemptionStats?.total_redemptions || 0,
             last_24h: recentRedemptions?.redemptions_24h || 0,
           },
-        },
-        api_keys: {
-          total: apiKeyStats?.total_api_keys || 0,
-          active: apiKeyStats?.active_api_keys || 0,
-          users_with_keys: apiKeyStats?.users_with_api_keys || 0,
         },
         storage: {
           attachments: storageStats?.total_attachments || 0,

@@ -1,6 +1,6 @@
 # PMail - 基于 Cloudflare 的临时邮箱系统
 
-一个完全基于 Cloudflare 免费服务构建的临时邮箱系统，支持用户注册、多邮箱管理、邮件搜索、附件下载、API Key 访问等功能。
+一个完全基于 Cloudflare 免费服务构建的临时邮箱系统，支持用户注册、多邮箱管理、邮件搜索、附件下载等功能。
 
 ## 🚀 本地开发与部署
 
@@ -61,7 +61,6 @@ cd ../../web && npm install && npm run build
 ### 用户系统
 - 用户注册和登录（支持 OAuth Linux.do 登录）
 - 密码找回功能
-- API Key 生成和管理（支持每用户多密钥）
 - 用户数据完全隔离
 - 游客模式（无需注册，2 小时有效期）
 
@@ -82,14 +81,12 @@ cd ../../web && npm install && npm run build
 - 批量删除
 
 ### API 接口
-- 北向 API（`/v1`，API Key 认证）- 适合自动化脚本
 - 内部 API（`/api`，JWT Token 认证）- 供 Web 前端使用
 - 完整的 RESTful 设计
 
 ### 安全特性
 - bcrypt 密码加密
 - JWT 无状态认证（自动密钥轮换，30 天周期）
-- API Key SHA-256 哈希存储
 - Turnstile CAPTCHA 验证
 - 登录锁定（5 次失败 = 15 分钟锁定）
 - 分级速率限制
@@ -120,7 +117,7 @@ PMail/
 │   ├── api/                    # API Worker（Hono REST API）
 │   │   ├── src/
 │   │   │   ├── index.ts       # 入口文件 + Cron 处理
-│   │   │   ├── routes/        # 路由模块（auth, mailbox, email, apikey, admin）
+│   │   │   ├── routes/        # 路由模块（auth, mailbox, email, admin）
 │   │   │   ├── middleware/    # 中间件（auth, rateLimit, error）
 │   │   │   ├── services/      # 业务逻辑
 │   │   │   └── utils/         # 工具函数
@@ -315,10 +312,11 @@ GUEST_MAILBOX_TTL = "7200"
 
 ## 📚 更多文档
 
-- [API 文档与实现原理](./other.md) — 完整 API 接口文档、数据库设计、架构原理、生产部署检查清单
+- [部署指南](./docs/DEPLOYMENT.md) — 本地一键部署 + GitHub Actions 自动部署
+- [API 文档与实现原理](./docs/ARCHITECTURE_AND_API.md) — 完整 API 接口、架构原理、实现细节
 - [数据库结构](./schema.sql)
-- [安全改进计划](./SECURITY_IMPROVEMENT_PLAN.md)
-- [游客模式部署指南](./GUEST_MODE_DEPLOYMENT.md)
+- [上线检查清单](./docs/PRODUCTION_CHECKLIST.md) — 含安全整改路线图
+- [功能 roadmap](./docs/FEATURE_GAP_ANALYSIS.md)
 
 ## 📚 相关文档
 

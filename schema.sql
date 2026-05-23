@@ -162,27 +162,6 @@ CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_r2_key ON attachments(r2_key);
 
 -- ==========================================
--- API Key 表（用于北向 API 认证）
--- 支持多 API Keys：每个用户可创建多个 key，用于不同场景
--- ==========================================
-CREATE TABLE IF NOT EXISTS api_keys (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,                     -- 用户 ID（支持多 keys，user_id 无 UNIQUE 约束）
-    name TEXT NOT NULL DEFAULT 'Default',         -- Key 名称（用户自定义）
-    key_hash TEXT NOT NULL UNIQUE,                -- 存储 SHA-256 哈希值，不存储明文
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_used_at DATETIME,                        -- 最后使用时间（自动更新）
-    expires_at DATETIME,                          -- 过期时间（NULL = 永不过期）
-    is_active INTEGER DEFAULT 1,                  -- 激活状态（0=禁用, 1=激活）
-    permissions TEXT DEFAULT 'read,write',        -- 权限列表（逗号分隔：read, write）
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
-CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);
-
--- ==========================================
 -- 用户统计表
 -- ==========================================
 CREATE TABLE IF NOT EXISTS user_statistics (

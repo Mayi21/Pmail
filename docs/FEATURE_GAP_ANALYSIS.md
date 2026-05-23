@@ -1,19 +1,19 @@
 # PMail 功能 Gap 分析与 Roadmap 建议
 
 > 归档日期：2026-05-20
-> 与本文档相关：[PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)、[SECURITY_IMPROVEMENT_PLAN.md](./SECURITY_IMPROVEMENT_PLAN.md)
+> 与本文档相关：[PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)（含安全整改路线图）
 
 ## 背景
 
-项目当前已具备完整的注册/登录、OAuth、API Key、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook、Turnstile、JWT 轮换等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
+项目当前已具备完整的注册/登录、OAuth、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook、Turnstile、JWT 轮换等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
 
-与同类公开服务（temp-mail.org、mail.tm、SimpleLogin、AnonAddy、addy.io）对照，仍存在若干"行业默认有但本项目没有"的能力空缺。本文档聚焦在 `PRODUCTION_CHECKLIST.md` 与 `SECURITY_IMPROVEMENT_PLAN.md` **没覆盖但用户实际会期待**的功能差距。
+与同类公开服务（temp-mail.org、mail.tm、SimpleLogin、AnonAddy、addy.io）对照，仍存在若干"行业默认有但本项目没有"的能力空缺。本文档聚焦在 `PRODUCTION_CHECKLIST.md` **没覆盖但用户实际会期待**的功能差距。
 
 ---
 
 ## 1. 现状边界
 
-**已实现且强项**：catch-all 收件、AES-GCM 加密邮件体、tier+兑换码、JWT 自动轮换、HMAC 签名 webhook、多 API Key、备份+恢复、Linux.do OAuth、guest mode、永久邮箱（NULL expires_at）。
+**已实现且强项**：catch-all 收件、AES-GCM 加密邮件体、tier+兑换码、JWT 自动轮换、HMAC 签名 webhook、备份+恢复、Linux.do OAuth、guest mode、永久邮箱（NULL expires_at）。
 
 **已在其他文档中规划（不在本文重复）**：MFA、refresh token、CSP nonce、CSRF、session 管理、refresh-token 化的 reset token、WAF、Sentry、ToS/Privacy、queue 实接、R2 lifecycle、staging env、压测、OWASP scan、admin IP 白名单。
 
@@ -72,7 +72,6 @@
 
 | Gap | 现状 |
 |-----|------|
-| **官方 SDK（JS/Python/Go）** | 仅有 OpenAPI `openapi.yaml`，无 SDK |
 | **IMAP / POP3 bridge** | 没有；无法在 Thunderbird/原生客户端读邮件 |
 | **浏览器扩展（一键生成 alias）** | 没有；这是 SimpleLogin / Bitwarden 的增长引擎 |
 | **CLI 工具** | 没有 |
@@ -101,7 +100,6 @@
 | ★ | Stripe 支付 | 中 | ★★ | ★★★★（解锁商业化） |
 | ★ | BYO domain | 大 | ★★ | ★★★★ |
 | ○ | IMAP/POP3 bridge | 大 | ★★ | ★★ |
-| ○ | 官方 SDK | 小-中 | ★ | ★★ |
 
 ---
 
@@ -146,7 +144,6 @@
 
 - **IMAP/POP3 bridge** — 工作量极大但用户基数小（绝大多数临时邮箱用户用网页就够），ROI 太低
 - **GraphQL endpoint** — 现有 REST 已足够，徒增维护负担
-- **官方 Go/Java SDK** — 等 API 稳定且有外部开发者诉求后再做
 - **复杂别名分组管理 UI** — 当前 mailbox 列表已能支撑，分组属于过度设计
 
 ---

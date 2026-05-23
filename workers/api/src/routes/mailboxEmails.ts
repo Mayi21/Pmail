@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { jwtAuth, auth, requirePermission } from '../middleware/auth';
+import { jwtAuth } from '../middleware/auth';
 import type { Env } from '../index';
 import { ErrorCode } from '../types';
 import { verifyMailboxOwnership } from '../utils/email';
@@ -299,84 +299,6 @@ app.get('/:address/search', jwtAuth, async (c) => {
           to: searchParams.date_to,
         } : null,
       },
-    },
-  });
-});
-
-/**
- * GET /v1/mailbox/:address/emails
- * Get emails for a specific mailbox via API key (North-facing API)
- * Requires: read permission
- */
-app.get('/v1/mailbox/:address/emails', auth, requirePermission('read'), async (c) => {
-  const userId = c.get('user_id');
-  const address = c.req.param('address');
-  const { page, limit } = paginationSchema.parse(c.req.query());
-
-  const tempEmailId = await verifyMailboxOwnership(address, userId, c.env.DB);
-  if (!tempEmailId) {
-    return c.json({
-      success: false,
-      error: 'Mailbox not found or access denied',
-      error_code: ErrorCode.PERMISSION_DENIED,
-    }, 403);
-  }
-
-  const offset = (page - 1) * limit;
-  const emails = await c.env.DB.prepare(`
-    SELECT
-      id,
-      from_email AS from_address,
-      from_name,
-      to_email AS to_address,
-      subject,
-      body_text,
-      body_html,
-      received_at,
-      is_read,
-      size_bytes,
-      (SELECT COUNT(*) FROM attachments WHERE email_id = e.id) as attachment_count
-    FROM emails e
-    WHERE temp_email_id = ? AND deleted_at IS NULL
-    ORDER BY received_at DESC
-    LIMIT ? OFFSET ?
-  `).bind(tempEmailId, limit, offset).all();
-
-  const countResult = await c.env.DB.prepare(`
-    SELECT COUNT(*) as total FROM emails
-    WHERE temp_email_id = ? AND deleted_at IS NULL
-  `).bind(tempEmailId).first<{ total: number }>();
-
-  // Process emails: decrypt and create preview
-  const processedEmails = await Promise.all(
-    emails.results.map(async (email: any) => {
-      const bodyPreview = await decryptAndPreview(
-        email.body_text || email.body_html,
-        c.env.DATABASE_ENCRYPTION_KEY
-      );
-
-      return {
-        id: email.id,
-        from_address: email.from_address,
-        from_name: email.from_name,
-        to_address: email.to_address,
-        subject: email.subject,
-        body_text: bodyPreview,
-        received_at: email.received_at,
-        is_read: email.is_read,
-        size_bytes: email.size_bytes,
-        has_attachments: (email.attachment_count as number) > 0,
-      };
-    })
-  );
-
-  return c.json({
-    success: true,
-    data: {
-      emails: processedEmails,
-      total: countResult?.total || 0,
-      page,
-      limit,
     },
   });
 });

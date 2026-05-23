@@ -13,7 +13,6 @@ import authRoutes from './routes/auth';
 import mailboxRoutes from './routes/mailbox';
 import emailRoutes from './routes/email';
 import mailboxEmailRoutes from './routes/mailboxEmails';
-import apiKeyRoutes from './routes/apikey';
 import attachmentRoutes from './routes/attachment';
 import healthRoutes from './routes/health';
 import userRoutes from './routes/user';
@@ -117,7 +116,7 @@ app.use('*', async (c, next) => {
     // Build headers object
     const headers: Record<string, string> = {
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '86400',
     };
     
@@ -166,7 +165,6 @@ app.route('/api/auth', authRoutes);
 app.route('/api/mailbox', mailboxRoutes);
 app.route('/api/emails', mailboxEmailRoutes);
 app.route('/api/email', emailRoutes);
-app.route('/api/apikey', apiKeyRoutes);
 app.route('/api/attachment', attachmentRoutes);
 app.route('/api/user', userRoutes);
 app.route('/api/user/settings', userSettingsRoutes);
@@ -187,13 +185,6 @@ app.route('/api/admin/domains', adminDomainsRoutes);
 // Mount public routes
 app.route('/api/domains', domainsRoutes);
 app.route('/api/admin/announcements', adminAnnouncementsRoutes);
-
-// North-facing API routes (v1)
-// Note: v1 routes are defined with full paths in their respective files
-app.route('/', mailboxRoutes);  // Includes /v1/mailbox, /v1/mailboxes
-app.route('/', mailboxEmailRoutes);  // Includes /v1/mailbox/:address/emails
-app.route('/', emailRoutes);  // Includes /v1/email/:id
-app.route('/v1', apiKeyRoutes);
 
 // Default 404 handler
 app.notFound((c) => {

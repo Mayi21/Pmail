@@ -31,10 +31,6 @@ export const schemas = {
 
   tempEmailAddress: z.string()
     .regex(/^[a-z0-9]{8,16}@.+$/, 'Invalid temporary email format'),
-
-  apiKey: z.string()
-    .min(32, 'Invalid API key format')
-    .startsWith('tek_', 'Invalid API key format'),
 };
 
 /**

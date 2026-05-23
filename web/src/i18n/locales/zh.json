@@ -209,8 +209,6 @@
     "title": "设置",
     "backToDashboard": "返回控制台",
     "profile": "个人资料",
-    "apiKeys": "API 密钥",
-    "apiDocs": "API 文档",
     "preferences": "偏好设置",
     "profileInfo": "个人信息",
     "profileInformation": "个人信息",
@@ -230,20 +228,6 @@
     "newPassword": "新密码",
     "confirmPassword": "确认新密码",
     "updatePassword": "更新密码",
-    "apiKeysTitle": "API 密钥",
-    "apiKeysDesc": "管理您的 API 密钥以进行程序化访问",
-    "apiKeysDescription": "管理您的 API 密钥以进行程序化访问",
-    "createNewKey": "创建新密钥",
-    "noApiKeys": "暂无 API 密钥",
-    "noApiKeysDesc": "创建您的第一个 API 密钥开始使用",
-    "createFirstKey": "创建您的第一个 API 密钥开始使用",
-    "active": "活跃",
-    "inactive": "未激活",
-    "created": "创建于",
-    "lastUsed": "最后使用",
-    "expires": "过期时间",
-    "confirmDeleteApiKey": "确定要删除此 API 密钥吗？",
-    "confirmDeleteKey": "确定要删除此 API 密钥吗？",
     "emailPreferences": "邮件偏好",
     "defaultMailboxDuration": "默认邮箱有效期",
     "defaultDuration": "默认邮箱有效期",
@@ -251,31 +235,8 @@
     "notifications": "通知",
     "enableNotifications": "启用新邮件通知",
     "timezone": "时区",
-    "apiKeyCreated": "API 密钥创建成功",
-    "apiKeyDeleted": "API 密钥删除成功",
     "settingsUpdated": "设置更新成功",
-    "apiKeyCopied": "API 密钥已复制到剪贴板",
-    "createApiKey": "创建新 API 密钥",
-    "apiKeyCreatedTitle": "API 密钥已创建",
-    "createNewApiKey": "创建新 API 密钥",
-    "apiKeyWarning": "⚠️ 请务必现在复制您的 API 密钥。您将无法再次查看它！",
-    "copyKeyWarning": "请务必现在复制您的 API 密钥。您将无法再次查看它！",
-    "keyName": "密钥名称",
-    "keyNamePlaceholder": "例如：生产环境 API",
-    "expiresIn": "有效期",
-    "never": "永不过期",
-    "30days": "30 天",
-    "90days": "90 天",
-    "1year": "1 年",
-    "permissions": "权限",
-    "read": "读取",
-    "write": "写入",
-    "creating": "创建中...",
-    "createKey": "创建密钥",
-    "done": "完成",
-    "copy": "复制",
     "cancel": "取消",
-    "delete": "删除",
     "10minutes": "10分钟",
     "30minutes": "30分钟",
     "1hour": "1小时",
@@ -323,114 +284,6 @@
       "clearError": "重新检查",
       "disableConfirmTitle": "关闭转发？",
       "disableConfirmMessage": "您的邮件将不再被转发。您可以随时重新启用转发。"
-    }
-  },
-  "apiDocs": {
-    "title": "API 文档",
-    "subtitle": "用于程序化访问 PMail 服务的 REST API",
-    "notice": {
-      "title": "开始使用 API",
-      "description": "在使用 API 之前，您需要先创建一个 API 密钥。请前往 \"API 密钥\" 标签页生成您的密钥。",
-      "hint": "所有请求都需要在请求头中携带 API 密钥："
-    },
-    "authentication": {
-      "title": "认证方式",
-      "description": "所有 API 请求需要使用 API Key 认证。将 API 密钥添加到请求头中。",
-      "baseUrl": "基础 URL：",
-      "headerFormat": "请求头格式："
-    },
-    "rateLimit": {
-      "title": "限流规则",
-      "description": "为保护服务稳定性,所有北向 API 请求都受到速率限制。请合理安排请求频率以避免触发限流。",
-      "currentLimit": "当前限制",
-      "perMinute": "60 次/分钟",
-      "basedOn": "基于客户端 IP 地址",
-      "headers": "限流响应头",
-      "headerName": "响应头",
-      "headerDescription": "说明",
-      "limitDesc": "当前时间窗口内允许的请求总数",
-      "remainingDesc": "当前时间窗口内剩余的请求次数",
-      "resetDesc": "限流窗口重置的时间戳(Unix时间)",
-      "errorExample": "超限错误响应示例",
-      "tip": "提示：",
-      "tipText": "建议在应用中实现指数退避策略,并监控响应头以避免触发限流。"
-    },
-    "groups": {
-      "mailbox": {
-        "title": "邮箱管理",
-        "description": "创建、查询和删除临时邮箱"
-      },
-      "email": {
-        "title": "邮件查询",
-        "description": "查询和读取邮件内容"
-      }
-    },
-    "endpoints": {
-      "createMailbox": {
-        "summary": "创建临时邮箱",
-        "description": "创建一个新的临时邮箱。可以自定义邮箱前缀和有效期。",
-        "responses": {
-          "200": "邮箱创建成功"
-        }
-      },
-      "listMailboxes": {
-        "summary": "获取邮箱列表",
-        "description": "获取当前用户的所有邮箱列表，包括邮件统计信息。",
-        "responses": {
-          "200": "获取成功"
-        }
-      },
-      "deleteMailbox": {
-        "summary": "删除邮箱",
-        "description": "删除指定的临时邮箱。注意：这是软删除操作。",
-        "parameters": {
-          "address": "邮箱地址"
-        },
-        "responses": {
-          "200": "删除成功"
-        }
-      },
-      "listEmails": {
-        "summary": "获取邮件列表",
-        "description": "获取指定邮箱的所有邮件列表，支持分页查询。",
-        "parameters": {
-          "address": "邮箱地址",
-          "page": "页码（从 1 开始）",
-          "limit": "每页数量（1-100）"
-        },
-        "responses": {
-          "200": "获取成功"
-        }
-      },
-      "getEmailDetail": {
-        "summary": "获取邮件详情",
-        "description": "获取单封邮件的完整详情，包括邮件正文、头部和附件列表。注意：访问邮件会自动将其标记为已读。",
-        "parameters": {
-          "id": "邮件 ID"
-        },
-        "responses": {
-          "200": "获取成功"
-        }
-      }
-    },
-    "parameters": "参数",
-    "paramName": "参数名",
-    "paramIn": "位置",
-    "paramType": "类型",
-    "paramRequired": "必填",
-    "paramDescription": "说明",
-    "yes": "是",
-    "no": "否",
-    "requestBody": "请求体",
-    "examples": "示例代码",
-    "copy": "复制",
-    "copied": "已复制！",
-    "responses": "响应示例",
-    "footer": {
-      "title": "注意事项",
-      "rateLimit": "所有 API 请求受速率限制保护，超过限制会返回 429 错误",
-      "errorHandling": "所有错误响应都包含 error 和 error_code 字段，便于错误处理",
-      "support": "如需帮助，请查看完整 API 文档或联系技术支持"
     }
   },
   "quota": {

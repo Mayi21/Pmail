@@ -13,7 +13,6 @@ import EmailDetailPage from './pages/EmailDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
 import OAuthCallbackPage from './pages/OAuthCallbackPage';
-import DevelopersPage from './pages/DevelopersPage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -104,7 +103,6 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/guest" element={<GuestDashboardPage />} />
             <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
-            <Route path="/developers" element={<DevelopersPage />} />
 
             {/* Protected routes */}
             <Route

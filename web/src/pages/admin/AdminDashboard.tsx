@@ -54,11 +54,6 @@ interface SystemStatistics {
       last_24h: number;
     };
   };
-  api_keys: {
-    total: number;
-    active: number;
-    users_with_keys: number;
-  };
   storage: {
     attachments: number;
     total_size_mb: string;

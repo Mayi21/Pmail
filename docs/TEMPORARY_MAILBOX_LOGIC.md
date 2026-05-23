@@ -1378,12 +1378,10 @@ CREATE INDEX IF NOT EXISTS idx_temp_emails_user_expires_deleted
 
 ## 📖 相关文档
 
-- **数据库表结构**: `schema.sql`
-- **用户等级系统**: `docs/USER_TIER_SYSTEM_DEPLOYMENT.md`
-- **API 文档**: `README.md`（第 101-932 行）
-- **前端等级实现**: `docs/FRONTEND_TIER_IMPLEMENTATION.md`
-- **安全改进计划**: `SECURITY_IMPROVEMENT_PLAN.md`
-- **生产部署清单**: `PRODUCTION_CHECKLIST.md`
+- **数据库表结构**: [`../schema.sql`](../schema.sql)
+- **API 与架构**: [`ARCHITECTURE_AND_API.md`](./ARCHITECTURE_AND_API.md)
+- **上线检查清单（含安全整改）**: [`PRODUCTION_CHECKLIST.md`](./PRODUCTION_CHECKLIST.md)
+- **部署与运维**: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
 
 ---
 

@@ -35,7 +35,6 @@ const BACKUP_TABLES = [
   'temp_emails',
   'emails',
   'attachments',
-  'api_keys',
   'rate_limits',
   'system_settings',
   'oauth_providers',

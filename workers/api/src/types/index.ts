@@ -109,16 +109,6 @@ export interface Attachment {
   created_at: string;
 }
 
-// API Key types
-export interface ApiKey {
-  id: number;
-  user_id: number;
-  key_hash: string;
-  name?: string;
-  created_at: string;
-  last_used_at?: string | null;
-}
-
 // JWT Token payload
 export interface JWTPayload {
   sub: string; // user_id
@@ -127,18 +117,11 @@ export interface JWTPayload {
   exp: number;
 }
 
-// API Key validation result
-export interface ApiKeyValidation {
-  valid: boolean;
-  user_id?: number;
-  key_id?: number;
-}
-
 // Request context
 export interface RequestContext {
   user_id?: number;
   username?: string;
-  auth_type?: 'jwt' | 'api_key';
+  auth_type?: 'jwt';
 }
 
 // API Response types

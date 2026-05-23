@@ -209,8 +209,6 @@
     "title": "Settings",
     "backToDashboard": "Back to Dashboard",
     "profile": "Profile",
-    "apiKeys": "API Keys",
-    "apiDocs": "API Docs",
     "preferences": "Preferences",
     "profileInfo": "Profile Information",
     "profileInformation": "Profile Information",
@@ -230,20 +228,6 @@
     "newPassword": "New Password",
     "confirmPassword": "Confirm New Password",
     "updatePassword": "Update Password",
-    "apiKeysTitle": "API Keys",
-    "apiKeysDesc": "Manage your API keys for programmatic access",
-    "apiKeysDescription": "Manage your API keys for programmatic access",
-    "createNewKey": "Create New Key",
-    "noApiKeys": "No API keys",
-    "noApiKeysDesc": "Create your first API key to get started",
-    "createFirstKey": "Create your first API key to get started",
-    "active": "Active",
-    "inactive": "Inactive",
-    "created": "Created",
-    "lastUsed": "Last used",
-    "expires": "Expires",
-    "confirmDeleteApiKey": "Are you sure you want to delete this API key?",
-    "confirmDeleteKey": "Are you sure you want to delete this API key?",
     "emailPreferences": "Email Preferences",
     "defaultMailboxDuration": "Default Mailbox Duration",
     "defaultDuration": "Default Mailbox Duration",
@@ -255,31 +239,8 @@
     "notifications": "Notifications",
     "enableNotifications": "Enable email notifications for new messages",
     "timezone": "Timezone",
-    "apiKeyCreated": "API key created successfully",
-    "apiKeyDeleted": "API key deleted successfully",
     "settingsUpdated": "Settings updated successfully",
-    "apiKeyCopied": "API key copied to clipboard",
-    "createApiKey": "Create New API Key",
-    "apiKeyCreatedTitle": "API Key Created",
-    "createNewApiKey": "Create New API Key",
-    "apiKeyWarning": "⚠️ Make sure to copy your API key now. You won't be able to see it again!",
-    "copyKeyWarning": "Make sure to copy your API key now. You won't be able to see it again!",
-    "keyName": "Key Name",
-    "keyNamePlaceholder": "e.g., Production API",
-    "expiresIn": "Expires In",
-    "never": "Never",
-    "30days": "30 days",
-    "90days": "90 days",
-    "1year": "1 year",
-    "permissions": "Permissions",
-    "read": "Read",
-    "write": "Write",
-    "creating": "Creating...",
-    "createKey": "Create Key",
-    "done": "Done",
-    "copy": "Copy",
     "cancel": "Cancel",
-    "delete": "Delete",
     "10minutes": "10 minutes",
     "30minutes": "30 minutes",
     "1hour": "1 hour",
@@ -359,114 +320,6 @@
     "cancel_button": "Cancel",
     "success": "Redeemed successfully! Your tier has been upgraded to {{tierName}}",
     "error": "Failed to redeem. Please check if the code is correct"
-  },
-  "apiDocs": {
-    "title": "API Documentation",
-    "subtitle": "REST API for programmatic access to PMail service",
-    "notice": {
-      "title": "Getting Started with the API",
-      "description": "Before using the API, you need to create an API key. Go to the \"API Keys\" tab to generate your key.",
-      "hint": "All requests require an API key in the request header:"
-    },
-    "authentication": {
-      "title": "Authentication",
-      "description": "All API requests require API Key authentication. Add your API key to the request headers.",
-      "baseUrl": "Base URL:",
-      "headerFormat": "Header Format:"
-    },
-    "rateLimit": {
-      "title": "Rate Limiting",
-      "description": "To protect service stability, all northbound API requests are subject to rate limiting. Please arrange request frequency reasonably to avoid triggering rate limits.",
-      "currentLimit": "Current Limit",
-      "perMinute": "60 requests/minute",
-      "basedOn": "Based on client IP address",
-      "headers": "Rate Limit Response Headers",
-      "headerName": "Header",
-      "headerDescription": "Description",
-      "limitDesc": "Total number of requests allowed in the current time window",
-      "remainingDesc": "Remaining number of requests in the current time window",
-      "resetDesc": "Timestamp (Unix time) when the rate limit window resets",
-      "errorExample": "Rate Limit Error Response Example",
-      "tip": "Tip:",
-      "tipText": "Implement exponential backoff in your application and monitor response headers to avoid triggering rate limits."
-    },
-    "groups": {
-      "mailbox": {
-        "title": "Mailbox Management",
-        "description": "Create, query, and delete temporary mailboxes"
-      },
-      "email": {
-        "title": "Email Queries",
-        "description": "Query and read email content"
-      }
-    },
-    "endpoints": {
-      "createMailbox": {
-        "summary": "Create Temporary Mailbox",
-        "description": "Create a new temporary mailbox. You can customize the mailbox prefix and expiration time.",
-        "responses": {
-          "200": "Mailbox created successfully"
-        }
-      },
-      "listMailboxes": {
-        "summary": "Get Mailbox List",
-        "description": "Get all mailboxes for the current user, including email statistics.",
-        "responses": {
-          "200": "Success"
-        }
-      },
-      "deleteMailbox": {
-        "summary": "Delete Mailbox",
-        "description": "Delete a specified temporary mailbox. Note: This is a soft delete operation.",
-        "parameters": {
-          "address": "Mailbox address"
-        },
-        "responses": {
-          "200": "Deleted successfully"
-        }
-      },
-      "listEmails": {
-        "summary": "Get Email List",
-        "description": "Get all emails for a specified mailbox with pagination support.",
-        "parameters": {
-          "address": "Mailbox address",
-          "page": "Page number (starting from 1)",
-          "limit": "Items per page (1-100)"
-        },
-        "responses": {
-          "200": "Success"
-        }
-      },
-      "getEmailDetail": {
-        "summary": "Get Email Details",
-        "description": "Get complete details of a single email, including body, headers, and attachments. Note: Accessing an email will automatically mark it as read.",
-        "parameters": {
-          "id": "Email ID"
-        },
-        "responses": {
-          "200": "Success"
-        }
-      }
-    },
-    "parameters": "Parameters",
-    "paramName": "Name",
-    "paramIn": "In",
-    "paramType": "Type",
-    "paramRequired": "Required",
-    "paramDescription": "Description",
-    "yes": "Yes",
-    "no": "No",
-    "requestBody": "Request Body",
-    "examples": "Code Examples",
-    "copy": "Copy",
-    "copied": "Copied!",
-    "responses": "Response Examples",
-    "footer": {
-      "title": "Important Notes",
-      "rateLimit": "All API requests are protected by rate limiting. Exceeding limits will return a 429 error",
-      "errorHandling": "All error responses include error and error_code fields for easier error handling",
-      "support": "For help, please refer to the complete API documentation or contact technical support"
-    }
   },
   "admin": {
     "dashboard": {

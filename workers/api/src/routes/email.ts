@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { jwtAuth, auth, requirePermission } from '../middleware/auth';
+import { jwtAuth } from '../middleware/auth';
 import type { Env } from '../index';
 import { ErrorCode } from '../types';
 import { sanitizeHtml, verifyEmailOwnership } from '../utils/email';
@@ -377,87 +377,6 @@ app.patch('/:id/read', jwtAuth, async (c) => {
   return c.json({
     success: true,
     message: 'Email marked as read',
-  });
-});
-
-/**
- * GET /v1/email/:id
- * Get email details via API key (North-facing API)
- * Requires: read permission
- */
-app.get('/v1/email/:id', auth, requirePermission('read'), async (c) => {
-  const userId = c.get('user_id');
-  const emailId = parseInt(c.req.param('id'));
-
-  if (!await verifyEmailOwnership(emailId, userId, c.env.DB)) {
-    return c.json({
-      success: false,
-      error: 'Email not found or access denied',
-      error_code: ErrorCode.EMAIL_NOT_FOUND,
-    }, 404);
-  }
-
-  const email = await c.env.DB.prepare(`
-    SELECT
-      e.id,
-      e.from_email AS from_address,
-      e.from_name,
-      e.to_email AS to_address,
-      e.subject,
-      e.body_text,
-      e.body_html,
-      e.headers,
-      e.received_at,
-      e.is_read,
-      e.size_bytes,
-      e.raw_content
-    FROM emails e
-    JOIN temp_emails t ON e.temp_email_id = t.id
-    WHERE e.id = ?
-  `).bind(emailId).first();
-
-  if (!email) {
-    return c.json({
-      success: false,
-      error: 'Email not found',
-      error_code: ErrorCode.EMAIL_NOT_FOUND,
-    }, 404);
-  }
-
-  // Decrypt email content if encrypted
-  await decryptEmailFields(email, c.env.DATABASE_ENCRYPTION_KEY);
-
-  if (email.body_html) {
-    email.body_html = sanitizeHtml(email.body_html as string);
-  }
-
-  const attachments = await c.env.DB.prepare(`
-    SELECT id, filename, size, content_type, status
-    FROM attachments WHERE email_id = ?
-  `).bind(emailId).all();
-
-  // Mark as read
-  if (!email.is_read) {
-    await c.env.DB.prepare(`
-      UPDATE emails SET is_read = 1 WHERE id = ?
-    `).bind(emailId).run();
-
-    await c.env.DB.prepare(`
-      UPDATE user_statistics
-      SET unread_emails = CASE
-        WHEN unread_emails > 0 THEN unread_emails - 1
-        ELSE 0
-      END
-      WHERE user_id = ?
-    `).bind(userId).run();
-  }
-
-  return c.json({
-    success: true,
-    data: {
-      ...email,
-      attachments: attachments.results,
-    },
   });
 });
 

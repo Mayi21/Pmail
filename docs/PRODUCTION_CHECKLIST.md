@@ -2,7 +2,7 @@
 
 > 本清单仅包含**未完成**和**部分完成**的项目
 > 已完成项目已移除，详见代码分析报告
-> 最后更新: 2025-11-04
+> 最后更新: 2026-05-22
 
 ## ℹ️ 重要说明
 
@@ -40,6 +40,17 @@ wrangler secret list
   - 当前: `ALLOWED_ORIGINS` 包含 `http://localhost:5173`
   - 操作: 在生产环境 `wrangler.toml` 中移除 localhost
   - 位置: `workers/api/wrangler.toml:60`
+
+- [ ] **JWT 令牌刷新机制**
+  - 当前: 仅使用 7 天过期的访问令牌，无 Refresh Token
+  - 风险: 令牌被盗后长期有效，无法远程撤销
+  - 方案: 双令牌机制（Access Token 15 分钟 + Refresh Token 30 天），启用 `sessions` 表，新增 `/api/auth/refresh` 端点
+  - 位置: `workers/api/src/services/jwtKeyManager.ts:150`
+
+- [ ] **密码重置令牌安全加固**
+  - 当前: 使用 `crypto.randomUUID()` 生成令牌，明文存储，无 IP 绑定
+  - 改为: 64 字符强随机令牌、存储哈希、一次性使用、绑定 IP、有效期降至 1 小时、使用后强制登出所有会话
+  - 位置: `workers/api/src/routes/auth.ts:318`
 
 ### 🗄️ 数据保护
 
@@ -82,6 +93,46 @@ wrangler secret list
 ---
 
 ## ⚡ 中优先级 (上线后 1 个月内完成)
+
+### 🔐 安全增强
+
+- [ ] **邮件 HTML 内容 XSS 净化**
+  - 当前: 显示 HTML 邮件时缺少严格的内容净化
+  - 方案: 引入 DOMPurify，配置允许的标签/属性白名单，移除脚本与事件处理器，沙箱化外部链接，通过代理加载外部图片
+  - 涉及: `web/src/components/EmailViewer*` 等邮件渲染组件
+
+- [ ] **统一 API 输入验证 (Zod)**
+  - 当前: 各端点验证规则零散
+  - 方案: 用 Zod 定义通用 Schema（邮箱、用户名、密码、文件上传参数），统一错误响应格式
+  - 位置: `workers/api/src/routes/*`
+
+- [ ] **会话管理增强**
+  - 当前: `sessions` 表未充分利用
+  - 方案: 记录设备/IP/地理位置；前端「查看活跃会话」「登出所有设备」；可疑登录（新设备/新地理位置）触发邮件通知
+  - 涉及: `schema.sql` 中 `sessions` 表、`workers/api/src/routes/auth.ts`
+
+- [ ] **附件安全检查**
+  - 当前: 仅靠后缀和大小限制
+  - 方案: Magic Number 文件类型验证、类型白名单、附件下载 URL 签名 + 过期、强制 `Content-Disposition: attachment`、可选病毒扫描 API
+  - 涉及: `workers/email/src/index.ts`、`workers/api/src/routes/attachments.ts`
+
+- [ ] **速率限制分层**
+  - 当前: 单一阈值
+  - 方案: 按用户等级（guest/basic/premium）分层；敏感操作（登录、密码重置）单独阈值；增加每小时维度；触发后告警
+  - 位置: `workers/api/src/middleware/rateLimit.ts`
+
+- [ ] **审计日志增强**
+  - 当前: `audit_logs` 表记录基础字段
+  - 方案: 新增 `before_value` / `after_value` 字段记录数据变更；为每个请求生成 request_id 链路追踪；敏感操作全量入库
+  - 涉及: `schema.sql` 中 `audit_logs` 表
+
+- [ ] **Webhook 安全（如启用）**
+  - 方案: HMAC-SHA256 签名 payload；校验 `webhook_url` 目标域防 SSRF；指数退避重试；调用与响应入库；单独速率限制
+  - 位置: 当前未实现 webhook 路由，新增前需提前设计
+
+- [ ] **入站邮件头验证**
+  - 方案: 在 Email Worker 中校验 SPF / DKIM / DMARC 验证结果（postal-mime headers），可疑邮件打标
+  - 位置: `workers/email/src/index.ts`
 
 ### 🏗️ 基础设施
 
@@ -132,11 +183,7 @@ wrangler secret list
   - 验证: Workers CPU 限制、D1 查询性能
 
 - [ ] **执行安全测试**
-  - [ ] OWASP Top 10 漏洞扫描
-  - [ ] SQL 注入测试
-  - [ ] XSS 测试
-  - [ ] 认证绕过尝试
-  - [ ] 暴力破解测试
+  - 见下方「🧪 安全测试 checklist」章节
 
 - [ ] **提升单元测试覆盖率**
   - 当前: 仅 3 个测试文件
@@ -174,11 +221,35 @@ wrangler secret list
 
 - [ ] **增强密码复杂度要求**
   - 当前: 8-64 字符，包含大小写字母和数字
-  - 建议: 增加特殊字符要求
+  - 建议: 最低 12 位 + 强制特殊字符；接入 Have I Been Pwned API 拦截常见密码；前端实时密码强度评分
+  - 位置: `workers/api/src/routes/auth.ts:29`
+
+- [ ] **多因素认证 (MFA / TOTP)**
+  - 状态: 未实现
+  - 方案: 用户可选启用 TOTP（Google Authenticator），生成备用恢复码，登录二步校验
+  - 涉及: `schema.sql` 新增 mfa 字段、`workers/api/src/routes/auth.ts`
 
 - [ ] **实现显式 CSRF 保护**
   - 当前: JWT 认证天然防御 CSRF
   - 可选: 为重要操作添加 CSRF Token
+
+- [ ] **数据保留策略自动化**
+  - 当前: 依赖固定 cron 清理
+  - 方案: 用户可自定义邮件保留时间（7/14/30 天）；软删除保留 7 天；附件单独计算配额；自动生成数据导出报告
+  - 涉及: `workers/api/src/services/cleanup*`
+
+- [ ] **前端安全加固**
+  - Subresource Integrity (SRI) 引用第三方脚本
+  - localStorage 中敏感数据加密存储
+  - 关键表单防抖（防暴力提交）
+  - 检查 HSTS / X-Frame-Options 是否生效
+  - 涉及: `web/index.html`、`web/public/_headers`
+
+- [ ] **依赖项安全扫描**
+  - 配置 GitHub Actions 自动扫描
+  - 集成 Snyk 或 Dependabot
+  - CI 中加入 `npm audit`
+  - 自动创建安全更新 PR
 
 ### 🏗️ 基础设施
 
@@ -235,11 +306,6 @@ wrangler secret list
   - 数据流图
   - 部署拓扑图
 
-- [ ] **公开 API 文档**
-  - 使用 Swagger/OpenAPI
-  - 托管在独立域名或子路径
-  - 包含使用示例和错误码
-
 ---
 
 ## 🔍 部分完成项目说明
@@ -251,12 +317,16 @@ wrangler secret list
 - **建议**: 对于敏感操作（删除账户、修改密码）考虑添加二次确认
 
 ### ⚠️ SQL 注入防护
-- **现状**: 使用参数化查询（D1 Prepared Statements）
-- **需要**: 执行渗透测试验证
+- **现状**: 全量使用 D1 Prepared Statements 参数化查询
+- **需要**: 渗透测试覆盖用户名、邮箱地址、搜索字段；CI 中加入静态检查
 
 ### ⚠️ 敏感数据脱敏
-- **现状**: 基本使用 `console.log`
-- **需要**: 确保日志中不包含密码、Token、API Key 等敏感信息
+- **现状**: 基本使用 `console.log` / `console.error`
+- **需要**:
+  - 审查所有日志点，确保不含密码、Token、邮件正文
+  - 错误响应统一封装，避免暴露堆栈或内部细节
+  - 用户列表 / 公开页面隐藏完整邮箱（如 `u***@example.com`）
+  - 生产环境构建移除所有调试日志
 
 ### ⚠️ 错误追踪
 - **现状**: 使用 `console.error` 记录错误
@@ -272,17 +342,141 @@ wrangler secret list
 1. ✅ 配置 `TURNSTILE_SECRET_KEY` 密钥 - 已通过 `wrangler secret` 配置
 2. ✅ 配置 `OAUTH_LINUXDO_CLIENT_SECRET` 密钥 - 已通过 `wrangler secret` 配置
 3. ✅ 实现邮件正文加密 - 已实现 AES-GCM-256 加密
+4. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
 
 ### 待完成 ⏳
-4. [ ] 配置 `DATABASE_ENCRYPTION_KEY` 密钥到 API Worker 和 Email Worker
-5. [ ] 配置 Cloudflare WAF 基础规则
-6. [ ] 从生产环境移除 `localhost` CORS 配置
-7. [ ] 配置 D1 数据库每日备份
-8. [ ] 编写服务条款和隐私政策
-9. [ ] 配置至少一个告警（错误率或响应时间）
-10. [ ] 执行一轮安全测试（至少测试 SQL 注入和 XSS）
+5. [ ] 配置 `DATABASE_ENCRYPTION_KEY` 密钥到 API Worker 和 Email Worker
+6. [ ] 配置 Cloudflare WAF 基础规则
+7. [ ] 从生产环境移除 `localhost` CORS 配置
+8. [ ] 配置 D1 数据库每日备份
+9. [ ] JWT 令牌刷新机制（Access + Refresh）
+10. [ ] 密码重置令牌安全加固（强随机 + 哈希存储 + 一次性 + 绑定 IP）
+11. [ ] 编写服务条款和隐私政策
+12. [ ] 配置至少一个告警（错误率或响应时间）
+13. [ ] 执行一轮安全测试（至少覆盖 SQL 注入、XSS、认证绕过）
 
-**快速上线完成度**: 3/10 (30%)
+**快速上线完成度**: 4/13 (31%)
+
+---
+
+## 🧪 安全测试 checklist
+
+上线前与每次重大变更后建议跑一遍，按需勾选。
+
+### 认证与授权
+
+- [ ] **密码安全**
+  - [ ] 测试弱密码被拒绝
+  - [ ] 测试常见密码被拒绝
+  - [ ] 验证密码哈希强度（bcrypt, cost >= 10）
+  - [ ] 测试密码重置流程
+  - [ ] 验证重置令牌只能使用一次
+
+- [ ] **会话管理**
+  - [ ] JWT 令牌正确过期
+  - [ ] Refresh Token 轮换工作正常
+  - [ ] 登出后令牌失效
+  - [ ] 同时登录多设备管理正常
+
+- [ ] **登录保护**
+  - [ ] 5 次失败后账户锁定
+  - [ ] IP 锁定机制正常
+  - [ ] Turnstile CAPTCHA 有效
+  - [ ] 登录通知邮件发送（如启用）
+
+### 输入验证
+
+- [ ] **SQL 注入防护**
+  - [ ] 测试用户名字段 SQL 注入
+  - [ ] 测试邮箱地址字段
+  - [ ] 测试搜索功能
+  - [ ] 所有查询使用参数化
+
+- [ ] **XSS 防护**
+  - [ ] 邮件 HTML 内容被净化
+  - [ ] 用户输入被正确转义
+  - [ ] CSP 策略阻止内联脚本
+  - [ ] 测试反射型 XSS
+  - [ ] 测试存储型 XSS
+
+- [ ] **文件上传安全**
+  - [ ] 文件类型验证（Magic Number）
+  - [ ] 文件大小限制生效
+  - [ ] 恶意文件名被拒绝
+  - [ ] 文件内容扫描（如启用）
+
+### API 安全
+
+- [ ] **速率限制**
+  - [ ] 超过限制返回 429
+  - [ ] 不同端点有不同限制
+  - [ ] 基于用户等级的限制
+  - [ ] `Retry-After` 头正确
+
+- [ ] **授权检查**
+  - [ ] 无令牌访问受保护端点被拒绝
+  - [ ] 过期令牌被拒绝
+  - [ ] 用户只能访问自己的数据（`user_id` 隔离）
+
+- [ ] **CORS 配置**
+  - [ ] 只允许白名单域名
+  - [ ] 预检请求正确处理
+  - [ ] Credentials 正确配置
+
+### 数据保护
+
+- [ ] **加密验证**
+  - [ ] 数据库中邮件内容已加密
+  - [ ] 解密功能正常
+  - [ ] 密钥轮换不影响旧数据
+  - [ ] R2 附件加密（如启用）
+
+- [ ] **敏感数据处理**
+  - [ ] 日志中无密码明文
+  - [ ] 错误消息不泄露内部信息
+  - [ ] API 响应不含敏感字段
+  - [ ] 审计日志完整
+
+### 基础设施
+
+- [ ] **HTTP 头**
+  - [ ] CSP 策略正确
+  - [ ] HSTS 已启用
+  - [ ] X-Frame-Options 正确
+  - [ ] X-Content-Type-Options 设置
+
+- [ ] **HTTPS**
+  - [ ] 强制 HTTPS 重定向
+  - [ ] TLS 1.3 可用
+  - [ ] 证书有效
+
+- [ ] **依赖项**
+  - [ ] `npm audit` 无高危漏洞
+  - [ ] Snyk / Dependabot 扫描通过
+  - [ ] 依赖项为最新安全版本
+
+### OWASP Top 10 (2021)
+
+- [ ] A01 - Broken Access Control
+- [ ] A02 - Cryptographic Failures
+- [ ] A03 - Injection
+- [ ] A04 - Insecure Design
+- [ ] A05 - Security Misconfiguration
+- [ ] A06 - Vulnerable Components
+- [ ] A07 - Authentication Failures
+- [ ] A08 - Data Integrity Failures
+- [ ] A09 - Logging Failures
+- [ ] A10 - SSRF
+
+### 参考链接
+
+- OWASP Top 10: <https://owasp.org/www-project-top-ten/>
+- OWASP API Security Top 10: <https://owasp.org/www-project-api-security/>
+- CWE Top 25: <https://cwe.mitre.org/top25/>
+- Cloudflare Workers Security: <https://developers.cloudflare.com/workers/platform/security/>
+- DOMPurify: <https://github.com/cure53/DOMPurify>
+- jose (JWT): <https://github.com/panva/jose>
+- Zod: <https://github.com/colinhacks/zod>
 
 ---
 
@@ -290,32 +484,32 @@ wrangler secret list
 
 | 类别 | 待完成项 | 预计工时 |
 |------|---------|---------|
-| 🔥 高优先级 | 7 项 | 6-10 小时 |
-| ⚡ 中优先级 | 13 项 | 20-30 小时 |
-| 🌱 低优先级 | 13 项 | 40-60 小时 |
-| **总计** | **33 项** | **66-100 小时** |
+| 🔥 高优先级 | 9 项 | 12-18 小时 |
+| ⚡ 中优先级 | 21 项 | 50-70 小时 |
+| 🌱 低优先级 | 19 项 | 60-90 小时 |
+| **总计** | **49 项** | **122-178 小时** |
 
 ### 项目整体完成度
 
 - **已完成**: 25 项 ✅
-- **待完成**: 33 项 ⏳
-- **总完成率**: **43%** → **目标 100%**
+- **待完成**: 49 项 ⏳
+- **总完成率**: **34%** → **目标 100%**
 
 ---
 
 ## 🎯 里程碑建议
 
 ### Milestone 1: 最小可上线版本 (MVP)
-- 完成所有高优先级项目
-- 时间: 1-2 周
+- 完成所有高优先级项目（含 JWT 刷新、密码重置加固）
+- 时间: 2-3 周
 
 ### Milestone 2: 生产就绪版本
-- 完成所有高优先级和中优先级项目
-- 时间: 4-6 周
+- 完成所有高优先级和中优先级项目（含 XSS 净化、附件安全、审计日志增强）
+- 时间: 6-8 周
 
 ### Milestone 3: 企业级版本
-- 完成所有项目
-- 时间: 8-12 周
+- 完成所有项目（含 MFA、依赖扫描、灾难演练）
+- 时间: 12-16 周
 
 ---
 
@@ -325,12 +519,13 @@ wrangler secret list
 
 ### 🔐 安全与认证
 - ✅ JWT 密钥轮换机制（每 30 天自动轮换）
-- ✅ API 密钥权限控制（read/write 权限分离）
 - ✅ 管理员端点保护（requireAdmin 中间件）
 - ✅ 速率限制（分钟级 + 每日限制）
 - ✅ 登录失败锁定（5 次失败 = 15 分钟锁定）
 - ✅ CORS 配置（基于 ALLOWED_ORIGINS 环境变量）
 - ✅ Secrets 安全存储（TURNSTILE_SECRET_KEY, OAUTH_LINUXDO_CLIENT_SECRET）
+- ✅ Turnstile CAPTCHA 防护（`workers/api/src/services/turnstileService.ts`）
+- ✅ 密码复杂度基线（8-64 字符 + 大小写 + 数字，`workers/api/src/routes/auth.ts:29`）
 
 ### 🏗️ 基础设施
 - ✅ Workers 配置（API + Email Workers）
@@ -354,13 +549,14 @@ wrangler secret list
 ### 📝 文档
 - ✅ README.md - 项目概览
 - ✅ CLAUDE.md - 开发者指南
-- ✅ API_KEY_DESIGN.md - API 密钥设计
 - ✅ schema.sql - 完整数据库结构注释
-- ✅ DEPLOYMENT_GUIDE.md - 部署指南
+- ✅ docs/DEPLOYMENT.md - 部署指南
+- ✅ docs/ARCHITECTURE_AND_API.md - API 与架构
 
 ---
 
 **检查清单生成日期**: 2025-11-04
+**安全方案合并日期**: 2026-05-22
 **基于代码版本**: commit `045392c`
 **Secrets 验证日期**: 2025-11-04 ✅
 **下次审查日期**: _______________

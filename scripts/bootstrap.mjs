@@ -46,7 +46,11 @@ function parseCli() {
     log(`Usage: node scripts/bootstrap.mjs [options]
 
 Creates Cloudflare D1, R2, KV, and Pages resources for PMail (idempotent),
-then populates wrangler.toml files and .env with the resulting IDs/names.
+then renders wrangler.toml / .env with the resulting IDs.
+
+This script only handles resource provisioning and config rendering.
+Deployment (migrations + wrangler deploy) is delegated to GitHub Actions
+(.github/workflows/deploy.yml). Push to main to trigger a deploy.
 
 Options:
   --dry-run               Show plan without creating resources or writing files
@@ -60,6 +64,11 @@ Environment:
 
 Non-resource template variables (\${DOMAIN}, \${ALLOWED_ORIGINS}) are read from
 .env if present; otherwise left as placeholders for you to fill in or envsubst.
+
+Examples:
+  node scripts/bootstrap.mjs                  # create resources + render configs
+  node scripts/bootstrap.mjs --dry-run        # preview without changes
+  node scripts/bootstrap.mjs --name-suffix=staging
 `);
     process.exit(0);
   }
@@ -401,16 +410,19 @@ async function main() {
 
   if (allRemaining.size) {
     warn(`Unfilled template variables: ${[...allRemaining].join(', ')}`);
-    log(style('     → set these in .env and re-run envsubst, or edit wrangler.toml directly.', 'gray'));
+    log(style('     → set these in .env and re-run, or edit wrangler.toml directly.', 'gray'));
   }
 
   log(style('\n✓ Bootstrap complete.', 'bold', 'green'));
   log(style('\nNext steps:', 'bold'));
   log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS / OAUTH_LINUXDO_CLIENT_ID', 'cyan')} in .env, then re-run to fill [vars]`);
-  log(`  2. Apply migrations:   ${style(`cd workers/api && npx wrangler d1 migrations apply ${state.d1.name} --remote`, 'cyan')}`);
-  log(`  3. Set worker secrets: ${style('cd workers/api && npx wrangler secret put DATABASE_ENCRYPTION_KEY', 'cyan')}`);
-  log(`     (also: TURNSTILE_SECRET_KEY, OAUTH_LINUXDO_CLIENT_SECRET; same for workers/email)`);
-  log(`  4. Deploy:             ${style('bash deploy.sh', 'cyan')}`);
+  log(`  2. Set worker secrets:`);
+  log(`       ${style('cd workers/api  && npx wrangler secret put DATABASE_ENCRYPTION_KEY', 'cyan')}`);
+  log(`       ${style('cd workers/api  && npx wrangler secret put TURNSTILE_SECRET_KEY', 'cyan')}`);
+  log(`       ${style('cd workers/api  && npx wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET', 'cyan')}`);
+  log(`       ${style('cd workers/email && npx wrangler secret put DATABASE_ENCRYPTION_KEY', 'cyan')}`);
+  log(`  3. Configure GitHub Secrets (see docs/DEPLOYMENT.md §3.2) and:`);
+  log(`       ${style('git push origin main', 'cyan')}    # GitHub Actions deploys`);
 }
 
 main().catch(err => die(err.stack || err.message || String(err)));

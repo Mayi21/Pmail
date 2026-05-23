@@ -1,5 +1,5 @@
 /**
- * Settings Page - User settings and API key management
+ * Settings Page - User profile, tier and preferences
  */
 
 import { useState } from 'react';
@@ -19,19 +19,7 @@ import { QuotaProgressBar } from '../components/QuotaProgressBar';
 import { TierExpirationCountdown } from '../components/TierExpirationCountdown';
 import { RedeemCodeModal } from '../components/RedeemCodeModal';
 import { useUserInfo } from '../hooks/useUserInfo';
-import { ApiDocumentation } from '../components/ApiDocumentation';
 import { forwardingAPI, ForwardingStatus } from '../api/forwarding';
-
-interface ApiKey {
-  id: number;
-  name: string;
-  key_preview: string;
-  created_at: string;
-  last_used_at?: string;
-  expires_at?: string;
-  is_active: boolean;
-  permissions: string[];
-}
 
 interface UserSettings {
   default_mailbox_duration: number;
@@ -44,36 +32,14 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'api-docs' | 'preferences' | 'forwarding'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'forwarding'>('profile');
   const [forwardingInput, setForwardingInput] = useState('');
   const [isEditingForwarding, setIsEditingForwarding] = useState(false);
   const [showDisableForwardingDialog, setShowDisableForwardingDialog] = useState(false);
-  const [showCreateApiKeyModal, setShowCreateApiKeyModal] = useState(false);
-  const [newApiKey, setNewApiKey] = useState<string | null>(null);
-  const [apiKeyForm, setApiKeyForm] = useState({
-    name: '',
-    expires_in: 0, // 0 means never expires
-    permissions: ['read', 'write'],
-  });
-  const [showDeleteApiKeyDialog, setShowDeleteApiKeyDialog] = useState(false);
-  const [apiKeyToDelete, setApiKeyToDelete] = useState<number | null>(null);
   const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
 
   // Fetch user info with tier and quota
   const { data: userInfo, isLoading: userInfoLoading } = useUserInfo();
-
-  // Fetch API keys
-  const { data: apiKeys, isLoading: apiKeysLoading } = useQuery<ApiKey[]>({
-    queryKey: ['apiKeys'],
-    queryFn: async () => {
-      const response = await apiClient.get('/api/apikey/list');
-      return response.data; // Fixed: response interceptor already unwrapped response.data
-    },
-    enabled: activeTab === 'api',
-    staleTime: 5 * 60 * 1000, // 5 minutes - consider data fresh for 5 min
-    refetchOnMount: false, // Don't refetch on component mount
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-  });
 
   // Fetch user settings
   const { data: settings } = useQuery<UserSettings>({
@@ -87,44 +53,6 @@ export default function SettingsPage() {
     refetchOnMount: false, // Don't refetch on component mount
     refetchOnWindowFocus: false, // Don't refetch on window focus
   });
-
-  // Create API key
-  const createApiKey = useMutation({
-    mutationFn: async (data: typeof apiKeyForm) => {
-      return apiClient.post('/api/apikey/generate', data);
-    },
-    onSuccess: (response) => {
-      setNewApiKey(response.data.key); // Fixed: response interceptor already unwrapped response.data
-      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
-      toast.success(t('settings.apiKeyCreated'));
-    },
-  });
-
-  // Delete API key
-  const deleteApiKey = useMutation({
-    mutationFn: async (id: number) => {
-      return apiClient.delete(`/api/apikey/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
-      toast.success(t('settings.apiKeyDeleted'));
-    },
-  });
-
-  // Handle delete API key with confirmation
-  const handleDeleteApiKey = (id: number) => {
-    setApiKeyToDelete(id);
-    setShowDeleteApiKeyDialog(true);
-  };
-
-  // Confirm delete API key action
-  const confirmDeleteApiKey = () => {
-    if (apiKeyToDelete !== null) {
-      deleteApiKey.mutate(apiKeyToDelete);
-    }
-    setShowDeleteApiKeyDialog(false);
-    setApiKeyToDelete(null);
-  };
 
   // Update settings
   const updateSettings = useMutation({
@@ -195,12 +123,6 @@ export default function SettingsPage() {
     },
   });
 
-  // Copy API key to clipboard
-  const copyApiKey = (key: string) => {
-    navigator.clipboard.writeText(key);
-    toast.success(t('settings.apiKeyCopied'));
-  };
-
   return (
     <div className="min-h-screen bg-neo-warm-white bg-grain">
       {/* Header */}
@@ -245,26 +167,6 @@ export default function SettingsPage() {
                 }`}
               >
                 {t('settings.profile')}
-              </button>
-              <button
-                onClick={() => setActiveTab('api')}
-                className={`relative px-4 sm:px-6 py-3 text-sm font-bold rounded-t-neo transition-all whitespace-nowrap ${
-                  activeTab === 'api'
-                    ? 'bg-neo-yellow text-neo-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[3px] after:bg-neo-black'
-                    : 'text-neo-gray hover:bg-gray-50'
-                }`}
-              >
-                {t('settings.apiKeys')}
-              </button>
-              <button
-                onClick={() => setActiveTab('api-docs')}
-                className={`relative px-4 sm:px-6 py-3 text-sm font-bold rounded-t-neo transition-all whitespace-nowrap ${
-                  activeTab === 'api-docs'
-                    ? 'bg-neo-yellow text-neo-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[3px] after:bg-neo-black'
-                    : 'text-neo-gray hover:bg-gray-50'
-                }`}
-              >
-                {t('settings.apiDocs')}
               </button>
               <button
                 onClick={() => setActiveTab('preferences')}
@@ -453,100 +355,6 @@ export default function SettingsPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* API Keys Tab */}
-            {activeTab === 'api' && (
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-neo-black">{t('settings.apiKeys')}</h3>
-                    <p className="text-sm text-neo-gray mt-1">
-                      {t('settings.apiKeysDescription')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowCreateApiKeyModal(true)}
-                    className="btn-neo-secondary text-sm"
-                  >
-                    + {t('settings.createNewKey')}
-                  </button>
-                </div>
-
-                {apiKeysLoading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="animate-neo-spin rounded-full h-8 w-8 border-4 border-neo-black border-t-neo-cyan"></div>
-                  </div>
-                ) : apiKeys?.length === 0 ? (
-                  <div className="text-center py-12 border-3 border-neo-black rounded-neo-xl">
-                    <svg
-                      className="mx-auto h-12 w-12 text-neo-gray"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={3}
-                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                      />
-                    </svg>
-                    <h3 className="mt-4 text-lg font-bold text-neo-black">{t('settings.noApiKeys')}</h3>
-                    <p className="mt-2 text-neo-gray">{t('settings.createFirstKey')}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {apiKeys?.map((key) => (
-                      <div key={key.id} className="border-3 border-neo-black rounded-neo-xl p-4 bg-white">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center">
-                              <h4 className="font-bold text-neo-black">{key.name}</h4>
-                              {key.is_active ? (
-                                <span className="ml-2 badge-neo bg-neo-green text-neo-black text-xs">
-                                  {t('settings.active')}
-                                </span>
-                              ) : (
-                                <span className="ml-2 badge-neo bg-gray-200 text-neo-gray text-xs">
-                                  {t('settings.inactive')}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-neo-gray mt-1 font-mono">{key.key_preview}</p>
-                            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-neo-gray mt-2">
-                              <span>{t('settings.created')}: {format(new Date(key.created_at), 'PP')}</span>
-                              {key.last_used_at && (
-                                <span>{t('settings.lastUsed')}: {format(new Date(key.last_used_at), 'PP')}</span>
-                              )}
-                              {key.expires_at && (
-                                <span>{t('settings.expires')}: {format(new Date(key.expires_at), 'PP')}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              {key.permissions.map((perm) => (
-                                <span
-                                  key={perm}
-                                  className="badge-neo bg-neo-yellow text-neo-black text-xs"
-                                >
-                                  {perm}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteApiKey(key.id)}
-                            disabled={deleteApiKey.isPending}
-                            className="ml-4 btn-neo-danger text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {t('settings.delete')}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
@@ -814,211 +622,14 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
-
-            {/* API Documentation Tab */}
-            {activeTab === 'api-docs' && (
-              <div className="max-w-5xl mx-auto">
-                {/* AI-Friendly API Docs Entry Card */}
-                <div className="card-neo mb-8 bg-neo-yellow border-neo-black">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0">
-                        <svg className="w-6 h-6 text-neo-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold mb-1">AI-Friendly API 文档</h3>
-                        <p className="text-gray-700 text-sm">提供 JSON 格式的工具描述和可直接复制的代码示例，专为 AI 代理设计</p>
-                      </div>
-                    </div>
-                    <a
-                      href="/developers"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-neo-primary whitespace-nowrap"
-                    >
-                      访问完整文档
-                    </a>
-                  </div>
-                </div>
-                <ApiDocumentation />
-              </div>
-            )}
           </div>
         </div>
       </main>
-
-      {/* Create API Key Modal */}
-      {showCreateApiKeyModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border-3 border-neo-black rounded-neo-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold text-neo-black mb-4">
-              {newApiKey ? t('settings.apiKeyCreated') : t('settings.createNewApiKey')}
-            </h3>
-
-            {newApiKey ? (
-              <div>
-                <div className="p-4 bg-neo-yellow border-3 border-neo-black rounded-neo-lg mb-4">
-                  <p className="text-sm font-bold text-neo-black mb-2">
-                    ⚠️ {t('settings.copyKeyWarning')}
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={newApiKey}
-                      readOnly
-                      className="input-neo flex-1 font-mono text-sm"
-                    />
-                    <button
-                      onClick={() => copyApiKey(newApiKey)}
-                      className="btn-neo-secondary text-sm"
-                    >
-                      {t('settings.copy')}
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowCreateApiKeyModal(false);
-                    setNewApiKey(null);
-                    setApiKeyForm({
-                      name: '',
-                      expires_in: 0,
-                      permissions: ['read', 'write'],
-                    });
-                  }}
-                  className="btn-neo-primary w-full"
-                >
-                  {t('settings.done')}
-                </button>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  createApiKey.mutate(apiKeyForm);
-                }}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.keyName')}</label>
-                  <input
-                    type="text"
-                    value={apiKeyForm.name}
-                    onChange={(e) => setApiKeyForm({ ...apiKeyForm, name: e.target.value })}
-                    required
-                    placeholder={t('settings.keyNamePlaceholder')}
-                    className="input-neo w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.expiresIn')}</label>
-                  <NeoSelect
-                    value={apiKeyForm.expires_in}
-                    onChange={(value) =>
-                      setApiKeyForm({ ...apiKeyForm, expires_in: Number(value) })
-                    }
-                    options={[
-                      { value: 0, label: t('settings.never') },
-                      { value: 2592000, label: t('settings.30days') },
-                      { value: 7776000, label: t('settings.90days') },
-                      { value: 31536000, label: t('settings.1year') },
-                    ]}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.permissions')}</label>
-                  <div className="space-y-2">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={apiKeyForm.permissions.includes('read')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setApiKeyForm({
-                              ...apiKeyForm,
-                              permissions: [...apiKeyForm.permissions, 'read'],
-                            });
-                          } else {
-                            setApiKeyForm({
-                              ...apiKeyForm,
-                              permissions: apiKeyForm.permissions.filter((p) => p !== 'read'),
-                            });
-                          }
-                        }}
-                        className="w-5 h-5 border-3 border-neo-black rounded-neo-xs accent-neo-cyan hover:border-4 transition-all"
-                      />
-                      <span className="ml-2 text-sm font-bold text-neo-black">{t('settings.read')}</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={apiKeyForm.permissions.includes('write')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setApiKeyForm({
-                              ...apiKeyForm,
-                              permissions: [...apiKeyForm.permissions, 'write'],
-                            });
-                          } else {
-                            setApiKeyForm({
-                              ...apiKeyForm,
-                              permissions: apiKeyForm.permissions.filter((p) => p !== 'write'),
-                            });
-                          }
-                        }}
-                        className="w-5 h-5 border-3 border-neo-black rounded-neo-xs accent-neo-cyan hover:border-4 transition-all"
-                      />
-                      <span className="ml-2 text-sm font-bold text-neo-black">{t('settings.write')}</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateApiKeyModal(false)}
-                    className="btn-neo-ghost flex-1"
-                  >
-                    {t('settings.cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!apiKeyForm.name || createApiKey.isPending}
-                    className="btn-neo-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {createApiKey.isPending ? t('settings.creating') : t('settings.createKey')}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Redeem Code Modal */}
       <RedeemCodeModal
         isOpen={isRedeemModalOpen}
         onClose={() => setIsRedeemModalOpen(false)}
-      />
-
-      {/* Delete API Key Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={showDeleteApiKeyDialog}
-        title={t('common.confirm')}
-        message={t('settings.confirmDeleteKey')}
-        confirmText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        onConfirm={confirmDeleteApiKey}
-        onCancel={() => {
-          setShowDeleteApiKeyDialog(false);
-          setApiKeyToDelete(null);
-        }}
-        isLoading={deleteApiKey.isPending}
       />
 
       {/* Disable Forwarding Confirmation Dialog */}
