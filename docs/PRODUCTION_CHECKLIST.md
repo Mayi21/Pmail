@@ -19,7 +19,6 @@ wrangler secret list
 
 # 当前已配置的 secrets:
 # ✅ TURNSTILE_SECRET_KEY
-# ✅ OAUTH_LINUXDO_CLIENT_SECRET
 ```
 
 或在 Cloudflare Dashboard 查看: Workers & Pages → 选择 Worker → Settings → Variables → Encrypted
@@ -318,8 +317,7 @@ wrangler secret list
 
 ### 已完成 ✅
 1. ✅ 配置 `TURNSTILE_SECRET_KEY` 密钥 - 已通过 `wrangler secret` 配置
-2. ✅ 配置 `OAUTH_LINUXDO_CLIENT_SECRET` 密钥 - 已通过 `wrangler secret` 配置
-3. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
+2. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
 
 ### 待完成 ⏳
 4. [ ] 配置 Cloudflare WAF 基础规则
@@ -499,7 +497,7 @@ wrangler secret list
 - ✅ 速率限制（分钟级 + 每日限制）
 - ✅ 登录失败锁定（5 次失败 = 15 分钟锁定）
 - ✅ CORS 配置（基于 ALLOWED_ORIGINS 环境变量）
-- ✅ Secrets 安全存储（TURNSTILE_SECRET_KEY, OAUTH_LINUXDO_CLIENT_SECRET）
+- ✅ Secrets 安全存储（TURNSTILE_SECRET_KEY）
 - ✅ Turnstile CAPTCHA 防护（`workers/api/src/services/turnstileService.ts`）
 - ✅ 密码复杂度基线（8-64 字符 + 大小写 + 数字，`workers/api/src/routes/auth.ts:29`）
 

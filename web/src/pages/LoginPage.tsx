@@ -13,7 +13,6 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import TurnstileWidget from '../components/TurnstileWidget';
-import LinuxdoLoginButton from '../components/LinuxdoLoginButton';
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
@@ -207,11 +206,6 @@ export default function LoginPage() {
               {isLoading ? t('auth.loggingIn') : t('auth.login')}
             </button>
           </form>
-
-          {/* OAuth Login */}
-          <div className="mt-6">
-            <LinuxdoLoginButton />
-          </div>
 
           {/* Divider */}
           <div className="relative my-6">

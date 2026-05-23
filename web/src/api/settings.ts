@@ -7,7 +7,6 @@ import apiClient from './client';
 export interface PublicSettings {
   registration_enabled?: string;
   password_login_enabled?: string;
-  oauth_linuxdo_enabled?: string;
   [key: string]: string | undefined;
 }
 

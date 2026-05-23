@@ -8,8 +8,7 @@ export interface User {
   username: string;
   email: string;
   password_hash?: string; // Excluded from API responses
-  avatar_url?: string | null; // OAuth user avatar URL
-  oauth_provider?: string | null; // OAuth provider (e.g., 'linuxdo')
+  avatar_url?: string | null; // User avatar URL
   tier_id: number;
   role: 'user' | 'admin';
   tier_upgraded_at?: string | null;

@@ -12,7 +12,6 @@
 #        - 渲染 workers/api/wrangler.toml 和 workers/email/wrangler.toml
 #   4. cd workers/api && wrangler secret put DATABASE_ENCRYPTION_KEY
 #      cd workers/api && wrangler secret put TURNSTILE_SECRET_KEY
-#      cd workers/api && wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
 #      cd workers/email && wrangler secret put DATABASE_ENCRYPTION_KEY
 #      （SENDGRID_API_KEY 等可选 secret 按需）
 #

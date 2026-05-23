@@ -78,8 +78,7 @@
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码",
     "registrationDisabled": "管理员已禁用注册功能",
-    "passwordLoginDisabled": "管理员已禁用密码登录",
-    "oauthDisabled": "管理员已禁用 OAuth 登录"
+    "passwordLoginDisabled": "管理员已禁用密码登录"
   },
   "app": {
     "title": "临时邮箱",
@@ -554,11 +553,10 @@
     "settings": {
       "title": "系统设置",
       "subtitle": "配置系统行为",
-      "description": "管理认证、OAuth 和其他系统级设置",
+      "description": "管理认证和其他系统级设置",
       "back": "返回",
       "loading": "加载设置中...",
       "authSettings": "认证设置",
-      "oauthSettings": "OAuth 设置",
       "systemSettings": "系统设置",
       "saved": "设置保存成功",
       "failedToSave": "保存设置失败"

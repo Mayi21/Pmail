@@ -36,7 +36,6 @@ ${GREEN}✓${NC} 资源初始化完成。下一步：
   1. 设置 worker secrets（按需）：
        cd workers/api  && wrangler secret put DATABASE_ENCRYPTION_KEY
        cd workers/api  && wrangler secret put TURNSTILE_SECRET_KEY
-       cd workers/api  && wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
        cd workers/email && wrangler secret put DATABASE_ENCRYPTION_KEY
 
   2. 在 Cloudflare Dashboard 配置 Email Routing（catch-all → pmail-email-receiver）

@@ -38,7 +38,6 @@ PMail 由三个 Cloudflare 组件组成：
 可选项（开了对应功能才需要）：
 
 - **Cloudflare Turnstile 站点** —— 注册/登录人机验证，免费在 Dashboard 申请
-- **Linux.do OAuth 应用** —— 想开 OAuth 登录时申请
 - **SendGrid 账号** —— 用于出站发信（密码重置邮件等）
 
 > wrangler 不需要全局安装，仓库内 `workers/api/node_modules/.bin/wrangler` 就够用，`scripts/bootstrap.mjs` 会自动找。
@@ -75,7 +74,7 @@ node scripts/bootstrap.mjs
 | D1 数据库 | `pmail-db` | 用户、邮箱、邮件、附件元数据 |
 | R2 桶 | `pmail-storage` | 附件（`attachments/` 前缀）+ DB 备份（`backups/` 前缀） |
 | KV 命名空间 | `JWT_KEYS` | 版本化 JWT 签名密钥 |
-| KV 命名空间 | `CACHE` | 共享缓存：`reset:*` / `oauth:*` / `email_valid:*` / `settings:*` |
+| KV 命名空间 | `CACHE` | 共享缓存：`reset:*` / `email_valid:*` / `settings:*` |
 | Pages 项目 | `pmail-web` | 前端静态站点 |
 
 完成后还会自动渲染：
@@ -130,7 +129,7 @@ KV 命名空间用途：
 | 命名空间 | 用途 |
 |---|---|
 | `JWT_KEYS` | 版本化 JWT 签名密钥（轮换） |
-| `CACHE` | 共享缓存：`reset:*`（密码重置）/ `oauth:*`（OAuth state CSRF）/ `email_valid:*`（地址有效性缓存）/ `settings:*`（系统配置） |
+| `CACHE` | 共享缓存：`reset:*`（密码重置）/ `email_valid:*`（地址有效性缓存）/ `settings:*`（系统配置） |
 
 ### 2.3 创建 Cloudflare API Token（CI 用）
 
@@ -176,9 +175,6 @@ cd workers/api
 wrangler secret put TURNSTILE_SECRET_KEY
 # 粘贴 Turnstile 控制台的 Secret Key 后回车
 
-# 2. Linux.do OAuth client secret（不用 OAuth 跳过这步）
-wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
-
 cd ../..
 ```
 
@@ -195,7 +191,7 @@ wrangler secret put SENDGRID_API_KEY
 ```bash
 cd workers/api
 wrangler secret list
-# 应该看到 TURNSTILE_SECRET_KEY / OAUTH_LINUXDO_CLIENT_SECRET
+# 应该看到 TURNSTILE_SECRET_KEY
 ```
 
 ### 3.2 GitHub Secrets（仅 CI 部署需要）
@@ -220,14 +216,12 @@ wrangler secret list
 | `KV_CACHE_ID` | CACHE 命名空间 ID | [§2.2](#22-手动方式逐条-wrangler-命令) |
 | `DOMAIN` | 业务主域名（如 `mail.example.com`） | 自定义 |
 | `ALLOWED_ORIGINS` | CORS 白名单，逗号分隔 | 自定义 |
-| `OAUTH_LINUXDO_CLIENT_ID` | Linux.do OAuth 应用 Client ID（非机密，但通过 envsubst 注入到 `wrangler.toml` 的 `[vars]` 段） | Linux.do OAuth 应用注册页 |
 
 #### 3.2.3 Worker 运行时 Secrets（CI 用 `wrangler secret put` 镜像推送）
 
 | Secret | 说明 | 如何生成 |
 |---|---|---|
 | `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile 验证密钥 | Turnstile Dashboard |
-| `OAUTH_LINUXDO_CLIENT_SECRET` | LinuxDo OAuth Client Secret | LinuxDo 应用后台 |
 | `SENDGRID_API_KEY` | SendGrid 出站发信（可选） | SendGrid Dashboard |
 
 #### 3.2.4 前端构建变量（Vite 编译期注入）
@@ -263,11 +257,10 @@ PAGES_PROJECT_NAME=pmail-web
 # 自己填这些
 DOMAIN=mail.your-domain.com                       # 收信用的主域名
 ALLOWED_ORIGINS=https://app.your-domain.com       # CORS 白名单，多个用逗号
-OAUTH_LINUXDO_CLIENT_ID=                          # 不用 OAuth 留空
 API_URL=https://pmail-api.<your-subdomain>.workers.dev/health  # 部署后健康检查用
 ```
 
-> **注意**：`.env.example` 默认没有 `ALLOWED_ORIGINS` 和 `OAUTH_LINUXDO_CLIENT_ID` 这两行，需要你**手动加上**，否则 bootstrap 不会渲染到 wrangler.toml 的 `[vars]` 段。
+> **注意**：`.env.example` 默认没有 `ALLOWED_ORIGINS` 这一行，需要你**手动加上**，否则 bootstrap 不会渲染到 wrangler.toml 的 `[vars]` 段。
 
 #### 4.1.2 业务变量参考
 

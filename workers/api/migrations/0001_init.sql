@@ -38,16 +38,14 @@ VALUES
   (2, 'premium', '优选用户', 10, 100, -1, '高级等级，无限临时邮箱，适合重度使用者', 1);
 
 -- ==========================================
--- 用户表
--- 支持密码登录与 OAuth 登录（OAuth 用户 password_hash 为 NULL）
+-- 用户表（密码登录）
 -- ==========================================
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
-    password_hash TEXT,                                              -- 允许 NULL（OAuth 用户无密码）
-    avatar_url TEXT,                                                 -- 用户头像 URL（OAuth 提供）
-    oauth_provider TEXT,                                             -- OAuth 提供商（'linuxdo' 等）
+    password_hash TEXT NOT NULL,
+    avatar_url TEXT,                                                 -- 用户头像 URL
     tier_id INTEGER DEFAULT 1,                                       -- 关联等级（外键指向 tier_configs）
     role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),       -- 用户角色
     tier_upgraded_at DATETIME,                                       -- 最后升级时间
@@ -63,7 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_users_tier_id ON users(tier_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_tier_expires ON users(tier_expires_at);
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
-CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider);
 
 -- 更新时间触发器
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp
@@ -71,26 +68,6 @@ AFTER UPDATE ON users
 BEGIN
     UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
-
--- ==========================================
--- OAuth 账户绑定表
--- ==========================================
-CREATE TABLE IF NOT EXISTS oauth_accounts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,                     -- 关联的用户 ID
-    provider TEXT NOT NULL,                       -- OAuth 提供商（'linuxdo'）
-    provider_user_id TEXT NOT NULL,               -- 提供商的用户 ID
-    provider_username TEXT,                       -- 提供商的用户名（可选）
-    provider_email TEXT,                          -- 提供商的邮箱（可选）
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(provider, provider_user_id)            -- 防止同一 OAuth 账号重复绑定
-);
-
-CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id);
-CREATE INDEX IF NOT EXISTS idx_oauth_accounts_provider ON oauth_accounts(provider);
-CREATE INDEX IF NOT EXISTS idx_oauth_accounts_provider_user_id ON oauth_accounts(provider, provider_user_id);
 
 -- ==========================================
 -- 临时邮箱表
@@ -329,14 +306,14 @@ CREATE INDEX IF NOT EXISTS idx_redemption_history_redeemed ON redemption_history
 CREATE UNIQUE INDEX IF NOT EXISTS idx_redemption_unique ON redemption_history(code_id, user_id);
 
 -- ==========================================
--- 系统设置表（动态配置：注册开关 / OAuth 开关等）
+-- 系统设置表（动态配置：注册开关 / 密码登录开关等）
 -- ==========================================
 CREATE TABLE IF NOT EXISTS system_settings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     setting_key TEXT NOT NULL UNIQUE,
     setting_value TEXT NOT NULL,
     setting_type TEXT DEFAULT 'boolean',          -- 'string', 'number', 'boolean', 'json'
-    category TEXT NOT NULL,                       -- 'auth', 'oauth', 'system'
+    category TEXT NOT NULL,                       -- 'auth', 'system'
     display_name TEXT NOT NULL,
     description TEXT,
     is_public INTEGER DEFAULT 0,                  -- 0 = 仅管理员可见, 1 = 公开可见
@@ -350,8 +327,7 @@ CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(categ
 INSERT OR IGNORE INTO system_settings (setting_key, setting_value, setting_type, category, display_name, description, is_public)
 VALUES
   ('registration_enabled', 'true', 'boolean', 'auth', '允许用户注册', '是否允许新用户通过邮箱注册账号', 1),
-  ('password_login_enabled', 'true', 'boolean', 'auth', '允许密码登录', '是否允许用户使用用户名/邮箱+密码登录', 1),
-  ('oauth_linuxdo_enabled', 'true', 'boolean', 'oauth', '允许 Linux.do OAuth', '是否启用 Linux.do 第三方登录', 1);
+  ('password_login_enabled', 'true', 'boolean', 'auth', '允许密码登录', '是否允许用户使用用户名/邮箱+密码登录', 1);
 
 CREATE TRIGGER IF NOT EXISTS update_system_settings_timestamp
 AFTER UPDATE ON system_settings

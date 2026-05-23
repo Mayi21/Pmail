@@ -344,7 +344,7 @@ function buildEnvsubstMap(state, userEnv) {
     '${KV_JWT_KEYS_ID}':         state.kv.JWT_KEYS,
     '${KV_CACHE_ID}':            state.kv.CACHE,
   };
-  for (const k of ['DOMAIN', 'ALLOWED_ORIGINS', 'OAUTH_LINUXDO_CLIENT_ID']) {
+  for (const k of ['DOMAIN', 'ALLOWED_ORIGINS']) {
     if (userEnv[k]) m[`\${${k}}`] = userEnv[k];
   }
   return m;
@@ -415,10 +415,9 @@ async function main() {
 
   log(style('\n✓ Bootstrap complete.', 'bold', 'green'));
   log(style('\nNext steps:', 'bold'));
-  log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS / OAUTH_LINUXDO_CLIENT_ID', 'cyan')} in .env, then re-run to fill [vars]`);
+  log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS', 'cyan')} in .env, then re-run to fill [vars]`);
   log(`  2. Set worker secrets:`);
   log(`       ${style('cd workers/api  && npx wrangler secret put TURNSTILE_SECRET_KEY', 'cyan')}`);
-  log(`       ${style('cd workers/api  && npx wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET', 'cyan')}`);
   log(`  3. Configure GitHub Secrets (see docs/DEPLOYMENT.md §3.2) and:`);
   log(`       ${style('git push origin main', 'cyan')}    # GitHub Actions deploys`);
 }

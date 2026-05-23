@@ -10,7 +10,7 @@
 
 - **D1 Database**：用于存储用户、邮箱、邮件元数据
 - **R2 Bucket**：单桶，附件用 `attachments/` 前缀、数据库备份用 `backups/` 前缀
-- **KV Namespaces**：`JWT_KEYS`（版本化 JWT 签名密钥）+ `CACHE`（共享缓存，按前缀复用：`reset:*` / `oauth:*` / `email_valid:*` / `settings:*`）
+- **KV Namespaces**：`JWT_KEYS`（版本化 JWT 签名密钥）+ `CACHE`（共享缓存，按前缀复用：`reset:*` / `email_valid:*` / `settings:*`）
 
 ### 2. 拷贝并填写配置文件
 
@@ -30,7 +30,6 @@ cp web/.env.example web/.env
 # 在 workers/api/ 下
 wrangler secret put JWT_SECRET                  # 至少 32 字节随机字符串
 wrangler secret put TURNSTILE_SECRET_KEY        # Cloudflare Turnstile 后台获取
-wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET # Linux.do OAuth 后台获取（可选）
 ```
 
 ### 4. 初始化数据库 + 部署
@@ -55,7 +54,7 @@ cd ../../web && npm install && npm run build
 ## 🎯 功能特性
 
 ### 用户系统
-- 用户注册和登录（支持 OAuth Linux.do 登录）
+- 用户注册和登录
 - 密码找回功能
 - 用户数据完全隔离
 - 游客模式（无需注册，2 小时有效期）

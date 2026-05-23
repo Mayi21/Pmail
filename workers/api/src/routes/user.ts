@@ -26,7 +26,6 @@ app.get('/me', jwtAuth, async (c) => {
         username,
         email,
         avatar_url,
-        oauth_provider,
         tier_id,
         role,
         tier_upgraded_at,
@@ -40,7 +39,6 @@ app.get('/me', jwtAuth, async (c) => {
       username: string;
       email: string;
       avatar_url: string | null;
-      oauth_provider: string | null;
       tier_id: number;
       role: string;
       tier_upgraded_at: string | null;
@@ -71,7 +69,6 @@ app.get('/me', jwtAuth, async (c) => {
             username: user.username,
             email: user.email,
             avatar_url: user.avatar_url,
-            oauth_provider: user.oauth_provider,
             role: user.role,
             created_at: user.created_at,
             updated_at: user.updated_at,
@@ -116,7 +113,6 @@ app.get('/me', jwtAuth, async (c) => {
           username: user.username,
           email: user.email,
           avatar_url: user.avatar_url,
-          oauth_provider: user.oauth_provider,
           role: user.role,
           created_at: user.created_at,
           updated_at: user.updated_at,

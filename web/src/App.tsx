@@ -12,7 +12,6 @@ import MailboxPage from './pages/MailboxPage';
 import EmailDetailPage from './pages/EmailDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import GuestDashboardPage from './pages/GuestDashboardPage';
-import OAuthCallbackPage from './pages/OAuthCallbackPage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -102,7 +101,6 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/guest" element={<GuestDashboardPage />} />
-            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
 
             {/* Protected routes */}
             <Route

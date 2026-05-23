@@ -302,61 +302,39 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
 
-                {/* Password Change Section - Only for password-based accounts */}
-                {!user?.oauth_provider && (
-                  <div className="pt-6 border-t-3 border-neo-black">
-                    <h3 className="text-lg font-bold text-neo-black mb-4">{t('settings.changePassword')}</h3>
-                    <form className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.currentPassword')}</label>
-                        <input
-                          type="password"
-                          className="input-neo w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.newPassword')}</label>
-                        <input
-                          type="password"
-                          className="input-neo w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.confirmPassword')}</label>
-                        <input
-                          type="password"
-                          className="input-neo w-full"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        className="btn-neo-primary"
-                      >
-                        {t('settings.updatePassword')}
-                      </button>
-                    </form>
-                  </div>
-                )}
-
-                {/* OAuth Account Notice */}
-                {user?.oauth_provider && (
-                  <div className="pt-6 border-t-3 border-neo-black">
-                    <div className="bg-blue-50 border-3 border-blue-500 rounded-lg p-6">
-                      <div className="flex items-start">
-                        <svg className="w-6 h-6 text-blue-500 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <h4 className="text-lg font-bold text-blue-900 mb-2">OAuth Account</h4>
-                          <p className="text-sm text-blue-800">
-                            You are logged in using {user.oauth_provider === 'linuxdo' ? 'Linux.do' : user.oauth_provider}.
-                            Password management is not available for OAuth accounts. To log in, simply click "Login with {user.oauth_provider === 'linuxdo' ? 'Linux.do' : user.oauth_provider}" on the login page.
-                          </p>
-                        </div>
-                      </div>
+                {/* Password Change Section */}
+                <div className="pt-6 border-t-3 border-neo-black">
+                  <h3 className="text-lg font-bold text-neo-black mb-4">{t('settings.changePassword')}</h3>
+                  <form className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.currentPassword')}</label>
+                      <input
+                        type="password"
+                        className="input-neo w-full"
+                      />
                     </div>
-                  </div>
-                )}
+                    <div>
+                      <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.newPassword')}</label>
+                      <input
+                        type="password"
+                        className="input-neo w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-neo-black mb-1">{t('settings.confirmPassword')}</label>
+                      <input
+                        type="password"
+                        className="input-neo w-full"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn-neo-primary"
+                    >
+                      {t('settings.updatePassword')}
+                    </button>
+                  </form>
+                </div>
               </div>
             )}
 

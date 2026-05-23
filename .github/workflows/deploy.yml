@@ -28,7 +28,6 @@ jobs:
       KV_CACHE_ID: ${{ secrets.KV_CACHE_ID }}
       DOMAIN: ${{ secrets.DOMAIN }}
       ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
-      OAUTH_LINUXDO_CLIENT_ID: ${{ secrets.OAUTH_LINUXDO_CLIENT_ID }}
 
     steps:
       - name: Checkout code
@@ -81,12 +80,6 @@ jobs:
         env:
           SECRET_VALUE: ${{ secrets.TURNSTILE_SECRET_KEY }}
         run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put TURNSTILE_SECRET_KEY
-
-      - name: Push API Worker secret - OAUTH_LINUXDO_CLIENT_SECRET
-        working-directory: workers/api
-        env:
-          SECRET_VALUE: ${{ secrets.OAUTH_LINUXDO_CLIENT_SECRET }}
-        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put OAUTH_LINUXDO_CLIENT_SECRET
 
       - name: Push API Worker secret - SENDGRID_API_KEY (optional)
         if: ${{ secrets.SENDGRID_API_KEY != '' }}

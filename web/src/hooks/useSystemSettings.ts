@@ -32,7 +32,6 @@ export function useSystemSettings() {
     // 便捷访问常用配置
     isRegistrationEnabled: getBoolean('registration_enabled', true),
     isPasswordLoginEnabled: getBoolean('password_login_enabled', true),
-    isOAuthEnabled: getBoolean('oauth_linuxdo_enabled', true),
     getBoolean,
   };
 }

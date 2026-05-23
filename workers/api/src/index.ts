@@ -66,11 +66,6 @@ export interface Env {
   GUEST_MAILBOX_TTL: string;
   GUEST_CLEANUP_RETENTION: string;
 
-  // OAuth settings
-  OAUTH_LINUXDO_CLIENT_ID: string;
-  OAUTH_LINUXDO_CLIENT_SECRET: string;
-  OAUTH_LINUXDO_REDIRECT_URI: string;
-
   // SendGrid (for transactional emails)
   SENDGRID_API_KEY?: string;
 

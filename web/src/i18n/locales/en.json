@@ -78,8 +78,7 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "registrationDisabled": "Registration is currently disabled by the administrator",
-    "passwordLoginDisabled": "Password login is currently disabled by the administrator",
-    "oauthDisabled": "OAuth login is currently disabled by the administrator"
+    "passwordLoginDisabled": "Password login is currently disabled by the administrator"
   },
   "app": {
     "title": "PMail",
@@ -558,11 +557,10 @@
     "settings": {
       "title": "System Settings",
       "subtitle": "Configure system behavior",
-      "description": "Manage authentication, OAuth, and other system-wide settings",
+      "description": "Manage authentication and other system-wide settings",
       "back": "Back",
       "loading": "Loading settings...",
       "authSettings": "Authentication Settings",
-      "oauthSettings": "OAuth Settings",
       "systemSettings": "System Settings",
       "saved": "Settings saved successfully",
       "failedToSave": "Failed to save settings"

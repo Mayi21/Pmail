@@ -17,7 +17,6 @@ interface AuthState {
   // Actions
   login: (username: string, password: string, turnstileToken: string) => Promise<void>;
   register: (username: string, email: string, password: string, turnstileToken: string) => Promise<void>;
-  setAuthData: (user: User, token: string) => void; // 直接设置认证数据（用于 OAuth）
   logout: () => void;
   checkAuth: () => Promise<void>;
   enterGuestMode: () => void; // 进入游客模式
@@ -72,15 +71,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ isLoading: false });
       throw error;
     }
-  },
-
-  setAuthData: (user: User, token: string) => {
-    tokenManager.setToken(token);
-    set({
-      user,
-      isAuthenticated: true,
-      hasInitialized: true,
-    });
   },
 
   logout: () => {

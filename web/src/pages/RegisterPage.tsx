@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import TurnstileWidget from '../components/TurnstileWidget';
-import LinuxdoLoginButton from '../components/LinuxdoLoginButton';
 
 // Form-specific schema (without turnstileToken)
 const registerFormSchema = z.object({
@@ -213,14 +212,6 @@ export default function RegisterPage() {
               {isLoading ? t('auth.creatingAccount') : t('auth.signUp')}
             </button>
           </form>
-
-          {/* OAuth Registration */}
-          <div className="mt-6">
-            <LinuxdoLoginButton />
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Using Linux.do login will automatically create an account
-            </p>
-          </div>
 
           {/* Divider */}
           <div className="relative my-6">

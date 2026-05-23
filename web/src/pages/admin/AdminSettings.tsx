@@ -66,7 +66,6 @@ export default function AdminSettings() {
 
   const categoryNames: Record<string, string> = {
     auth: t('admin.settings.authSettings'),
-    oauth: t('admin.settings.oauthSettings'),
     system: t('admin.settings.systemSettings'),
   };
 

@@ -12,7 +12,6 @@ export interface User {
   username: string;
   email: string;
   avatar_url?: string | null;
-  oauth_provider?: string | null;
   created_at?: string;
 }
 
@@ -74,21 +73,5 @@ export const authAPI = {
       token,
       new_password: newPassword,
     });
-  },
-
-  // OAuth methods
-  getLinuxdoAuthUrl: async (): Promise<{
-    success: boolean;
-    data?: {
-      authorization_url: string;
-      state: string;
-    };
-    error?: string;
-  }> => {
-    return apiClient.get('/api/auth/oauth/linuxdo');
-  },
-
-  oauthCallback: async (code: string, state: string): Promise<LoginResponse> => {
-    return apiClient.post('/api/auth/oauth/callback', { code, state });
   },
 };

@@ -37,8 +37,6 @@ const BACKUP_TABLES = [
   'attachments',
   'rate_limits',
   'system_settings',
-  'oauth_providers',
-  'oauth_accounts',
   'redemption_codes',
   'audit_logs',
   'user_statistics'
