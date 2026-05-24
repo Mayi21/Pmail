@@ -5,7 +5,7 @@
 
 ## 背景
 
-项目当前已具备完整的注册/登录、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook、Turnstile 等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
+项目当前已具备完整的注册/登录、多域名、多 mailbox、tier + 兑换码、admin 面板、审计日志（表存在）、备份、Webhook 等能力，前端国际化齐全（zh/en）、PWA、a11y 基础已铺。
 
 与同类公开服务（temp-mail.org、mail.tm、SimpleLogin、AnonAddy、addy.io）对照，仍存在若干"行业默认有但本项目没有"的能力空缺。本文档聚焦在 `PRODUCTION_CHECKLIST.md` **没覆盖但用户实际会期待**的功能差距。
 
@@ -13,9 +13,9 @@
 
 ## 1. 现状边界
 
-**已实现且强项**：catch-all 收件、AES-GCM 加密邮件体、tier+兑换码、HMAC 签名 webhook、备份+恢复、guest mode、永久邮箱（NULL expires_at）。
+**已实现且强项**：catch-all 收件、tier+兑换码、HMAC 签名 webhook、备份+恢复、guest mode、永久邮箱（NULL expires_at）。
 
-**已在其他文档中规划（不在本文重复）**：MFA、refresh token、CSP nonce、CSRF、session 管理、refresh-token 化的 reset token、WAF、Sentry、ToS/Privacy、queue 实接、R2 lifecycle、staging env、压测、OWASP scan、admin IP 白名单。
+**已在其他文档中规划（不在本文重复）**：MFA、CSP nonce、CSRF、session 管理、WAF、Sentry、ToS/Privacy、queue 实接、R2 lifecycle、staging env、压测、OWASP scan、admin IP 白名单、`JWT_SECRET` 手动轮换运维（当前无自动轮换，重推 secret 即让所有 token 失效）。
 
 ---
 
@@ -25,7 +25,7 @@
 
 | Gap | 现状 | 同类参照 |
 |-----|------|----------|
-| **出站邮件（reply/forward from alias）** | 完全没有；只有 `services/emailService.ts` 内部发密码重置 | SimpleLogin、AnonAddy、addy.io 全部支持 |
+| **出站邮件（reply/forward from alias）** | 完全没有；密码重置等出站发信流程已下线 | SimpleLogin、AnonAddy、addy.io 全部支持 |
 | **转发到真实邮箱** | 没有；user 必须登录本系统才能看 | SimpleLogin 的核心卖点 |
 | **PGP 加密转发** | 没有 | SimpleLogin / Proton 标配 |
 | **命名别名（user-defined）** | 已有自定义 address，但没有"shopping/newsletter/bank"语义别名分组管理 UI | AnonAddy 有 |
@@ -110,8 +110,8 @@
 把 4 个 ★★★ 项打包做掉，让项目从"功能完整 demo"跃迁到"可对外公开运营的产品"：
 
 1. **SSE 实时邮件推送** — `/api/email/stream` 长连接，Email worker 写库后通过 KV pub/sub 或 Durable Object 触发推送
-2. **Telegram + Discord 通知通道** — 在现有 `user_settings` 加 `telegram_chat_id` / `discord_webhook_url` 字段，复用 `queue.ts` 中 webhook 发送的位置增加两个分支
-3. **注册邮箱验证** — 注册时发送验证邮件（`emailService.ts` 已有 `sendWelcomeEmail` 但没人调），未验证账号 24h 后自动清理
+2. **Telegram + Discord 通知通道** — 在现有 `user_settings` 加 `telegram_chat_id` / `discord_webhook_url` 字段，在 `workers/email/src/index.ts` 邮件落库后并行触发已有 webhook + 新增 Telegram / Discord 两个分支
+3. **注册邮箱验证** — 注册时发送验证邮件，未验证账号 24h 后自动清理（需要先重新引入出站发信通道，例如 Resend / Mailgun / Cloudflare Email Workers send_email binding）
 4. **账号自助删除 + GDPR 数据导出** — `/api/user/export`（产出 ZIP：profile + 邮件元数据 + 设置 JSON）和 `/api/user/delete-account`（软删 + 7 天宽限期撤销窗口）
 
 **预期收益**：用户感知层面立刻"像个真正的产品"；合规底线补齐；上线公网风险显著降低。
@@ -120,7 +120,7 @@
 
 如果希望产品定位升级而不只是体验完善：
 
-**做"邮件转发到真实邮箱"单项** — 在 Email worker 收信后，若该 mailbox 设置了 forward target，则通过 Cloudflare Email Routing 的 forward action 或 Resend/SendGrid 把邮件转发到用户真实邮箱（注意 SPF/DKIM 签名需要走自有域）。配套 UI：在 mailbox 设置里加"转发到"字段；在 user_settings 加全局默认转发。
+**做"邮件转发到真实邮箱"单项** — 在 Email worker 收信后，若该 mailbox 设置了 forward target，则通过 Cloudflare Email Routing 的 forward action 或第三方出站邮件服务（如 Resend、Mailgun 等）把邮件转发到用户真实邮箱（注意 SPF/DKIM 签名需要走自有域）。配套 UI：在 mailbox 设置里加"转发到"字段；在 user_settings 加全局默认转发。
 
 **预期收益**：产品从"临时收件箱"进入"个人邮件别名"赛道，与 SimpleLogin / AnonAddy 同位。可作为付费 tier 的差异化能力（免费 tier 限 1 个转发地址等）。
 
@@ -163,9 +163,9 @@
 仅作参考，本文档是 roadmap，不直接对应代码改动：
 
 - `workers/api/src/routes/email.ts` — 加 SSE 端点
-- `workers/api/src/services/emailService.ts` — 接通 `sendWelcomeEmail` / 加 Telegram 发送
+- `workers/api/src/services/`（需新建）— 出站发信服务（如 `mailService.ts`）、Telegram / Discord 通知服务
 - `workers/api/src/routes/user.ts` — 加 `/export` 与 `/delete-account`
-- `workers/email/src/queue.ts` — webhook 派发处加 Telegram / Discord 分支
+- `workers/email/src/index.ts` — `email()` handler 内邮件落库后插入 Telegram / Discord 通知派发分支
 - `web/src/pages/Settings.tsx` — 加 Telegram chat id / 通知通道 UI
 - `web/src/hooks/useEmailStream.ts`（新增）— EventSource 包装
 - `schema.sql` + `migrations/` — 加 `email_verifications` / `account_deletions` 表

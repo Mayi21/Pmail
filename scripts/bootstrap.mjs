@@ -337,12 +337,13 @@ function buildLegacyMap(state) {
   };
 }
 
-function buildEnvsubstMap(state, userEnv) {
+function buildEnvsubstMap(state, userEnv, accountId) {
   const m = {
     '${D1_DATABASE_NAME}':       state.d1.name,
     '${D1_DATABASE_ID}':         state.d1.id,
     '${R2_BUCKET}':              state.r2.storage,
     '${KV_CACHE_ID}':            state.kv.CACHE,
+    '${CLOUDFLARE_ACCOUNT_ID}':  accountId,
   };
   for (const k of ['DOMAIN', 'ALLOWED_ORIGINS']) {
     if (userEnv[k]) m[`\${${k}}`] = userEnv[k];
@@ -514,7 +515,7 @@ async function main() {
   log(style('\n▸ Writing config files', 'bold', 'blue'));
   const userEnv = await loadUserEnv();
   const legacyMap = buildLegacyMap(state);
-  const envsubstMap = buildEnvsubstMap(state, userEnv);
+  const envsubstMap = buildEnvsubstMap(state, userEnv, accountId);
 
   const allRemaining = new Set();
   for (const f of TOML_FILES) {
@@ -538,9 +539,7 @@ async function main() {
   log(style('\n✓ Bootstrap complete.', 'bold', 'green'));
   log(style('\nNext steps:', 'bold'));
   log(`  1. Fill ${style('DOMAIN / ALLOWED_ORIGINS', 'cyan')} in .env, then re-run to fill [vars]`);
-  log(`  2. Set worker secrets (only if you enable Turnstile / outbound mail):`);
-  log(`       ${style('cd workers/api  && npx wrangler secret put TURNSTILE_SECRET_KEY', 'cyan')}`);
-  log(`  3. Deployment is handled exclusively by GitHub Actions. Configure`);
+  log(`  2. Deployment is handled exclusively by GitHub Actions. Configure`);
   log(`     GitHub Secrets (see docs/DEPLOYMENT.md §3.2) then:`);
   log(`       ${style('git push origin main', 'cyan')}    # triggers deploy`);
 }

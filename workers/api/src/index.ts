@@ -48,23 +48,14 @@ export interface Env {
 
   // Environment variables
   DOMAIN: string;
-  FRONTEND_URL: string;
   ALLOWED_ORIGINS: string;
   JWT_SECRET: string;  // JWT 签名密钥（wrangler secret）
   ENABLE_AUDIT_LOG: string;
-  MAX_MAILBOXES_PER_USER: string;
   DEFAULT_MAILBOX_TTL: string;
-  MAX_MAILBOX_TTL: string;
-
-  // Turnstile (secret key)
-  TURNSTILE_SECRET_KEY: string;
 
   // Guest mode settings
   GUEST_MAILBOX_TTL: string;
   GUEST_CLEANUP_RETENTION: string;
-
-  // SendGrid (for transactional emails)
-  SENDGRID_API_KEY?: string;
 
   // Cloudflare API (for email forwarding destination management)
   CLOUDFLARE_API_TOKEN?: string;

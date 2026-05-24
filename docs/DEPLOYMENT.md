@@ -36,8 +36,7 @@ PMail 由三个 Cloudflare 组件组成：
 
 可选项（开了对应功能才需要）：
 
-- **Cloudflare Turnstile 站点** —— 注册/登录人机验证，免费在 Dashboard 申请
-- **SendGrid 账号** —— 用于出站发信（密码重置邮件等）
+- **Cloudflare API Token（含 Email Routing Addresses: Edit 权限）** —— 仅在启用 admin 域名/转发管理时需要，详见 [§3.1 可选 secret](#可选-secret)
 
 > wrangler 不需要全局安装，仓库内 `workers/api/node_modules/.bin/wrangler` 就够用，`scripts/bootstrap.mjs` 会自动找。
 
@@ -49,9 +48,9 @@ PMail 由三个 Cloudflare 组件组成：
 
 ### 2.1 自动方式：bootstrap.mjs（推荐）
 
-仓库内提供了一键脚本 `scripts/bootstrap.mjs`（Node 18+），一次执行内完成 D1 / R2 / KV / Pages 资源创建，自动检测已存在的资源并**幂等复用**，渲染本地 `wrangler.toml` 系列文件以及 `.env`，并自动生成 + 推送 `JWT_SECRET`（已存在则跳过）。
+仓库内提供了一键脚本 `scripts/bootstrap.mjs`（Node 18+），一次执行内完成 D1 / R2 / KV / Pages 资源创建，自动检测已存在的资源并**幂等复用**，渲染本地 `wrangler.toml` 系列文件以及 `.env`，并自动生成 + 推送 `JWT_SECRET`（用 `openssl rand -base64 32` 生成随机串，首次运行后通过 `wrangler secret put JWT_SECRET` 写入 API Worker；已存在则跳过，不会覆盖）。
 
-前置条件：已运行过 `wrangler login`，或导出了 `CLOUDFLARE_API_TOKEN`；若账号下有多个 account，需通过 `--account-id` 或 `CLOUDFLARE_ACCOUNT_ID` 指明。
+前置条件：已运行过 `wrangler login`，或导出了 `CLOUDFLARE_API_TOKEN`（若用 token 而非 wrangler login，token 需含 [§2.3](#23-创建-cloudflare-api-tokenci-用) 列出的全部权限，因为 bootstrap 会顺带启用 Email Routing）；若账号下有多个 account，需通过 `--account-id` 或 `CLOUDFLARE_ACCOUNT_ID` 指明。
 
 ```bash
 cd /path/to/PMail
@@ -155,34 +154,21 @@ export CLOUDFLARE_API_TOKEN=<your-token>
 
 PMail 的敏感信息分两层：
 
-- **Worker secrets**：通过 `wrangler secret put` 推送到 Cloudflare，运行时由 Worker 读取。`JWT_SECRET` 由 `bootstrap.mjs` 自动推送；其它（Turnstile 等）需要首次部署前手工跑一次 `wrangler secret put`
-- **GitHub Secrets**：仅当走 GitHub Actions 自动部署时录入，CI 用 `envsubst` 渲染 `wrangler.toml` 并镜像推送 Worker secrets
+- **Worker secrets**：通过 `wrangler secret put` 推送到 Cloudflare，运行时由 Worker 读取。`JWT_SECRET` 由 `scripts/bootstrap.mjs` 自动生成并推送；其它（如启用 admin 域名/转发管理用的 `CLOUDFLARE_API_TOKEN`）按需手动设置。CI 不参与 Worker secret 推送 —— 所有 secret 均由本地 bootstrap 或手动 `wrangler secret put` 完成。
+- **GitHub Secrets**：仅当走 GitHub Actions 自动部署时录入，CI 用 `envsubst` 渲染 `wrangler.toml`
 
 ### 3.1 Worker secrets
 
 业务变量明文存在 `wrangler.toml` 里就行，但**敏感凭据**必须通过 `wrangler secret put` 推送，不要写文件。
 
-> **`JWT_SECRET` 由 `scripts/bootstrap.mjs` 自动生成并推送**（用 `crypto.randomBytes(32)` 生成 base64 串），首次跑 bootstrap 后会自动出现在 `wrangler secret list` 里，无需手动设置。重跑 bootstrap 会检测已存在的 `JWT_SECRET` 并跳过，不会覆盖。如确需手动轮换，参考下方手动设置流程。
-
-#### 必须设置（1 个）
-
-```bash
-# 进入 API Worker 目录
-cd workers/api
-
-# Turnstile 后端验证密钥
-wrangler secret put TURNSTILE_SECRET_KEY
-# 粘贴 Turnstile 控制台的 Secret Key 后回车
-
-cd ../..
-```
+> **JWT_SECRET 由 `scripts/bootstrap.mjs` 自动生成并推送**：bootstrap 首次执行时用 `openssl rand -base64 32` 生成随机密钥并 `wrangler secret put JWT_SECRET`，后续重跑会检测已存在并跳过（不会覆盖）。如未跑过 bootstrap、或需要手动轮换，见下方"手动设置 JWT_SECRET"。
 
 #### 手动设置 JWT_SECRET（仅在需要轮换或 bootstrap 未执行时）
 
 ```bash
 cd workers/api
 openssl rand -base64 32 | wrangler secret put JWT_SECRET
-# 注意：更换 JWT_SECRET 会让所有已签发的 token 立即失效，所有用户强制重新登录
+# 注意：更换 JWT_SECRET 会让所有已签发的 token 立即失效，所有用户被迫重新登录
 cd ../..
 ```
 
@@ -190,9 +176,6 @@ cd ../..
 
 ```bash
 cd workers/api
-
-# 出站发信（用 SendGrid 发密码重置邮件等，不需要可跳过）
-wrangler secret put SENDGRID_API_KEY
 
 # 邮件转发目标管理（仅当启用 admin 域名/转发管理功能时需要）
 # Token 需具备 "Email Routing Addresses: Edit" 权限，与 §2.3 的 CI 部署 Token 不是同一个
@@ -204,7 +187,7 @@ wrangler secret put CLOUDFLARE_API_TOKEN
 ```bash
 cd workers/api
 wrangler secret list
-# 应该看到 JWT_SECRET 和 TURNSTILE_SECRET_KEY
+# 应该看到 JWT_SECRET（由 bootstrap 自动设置）。其它（CLOUDFLARE_API_TOKEN 等）设置过的也会列出。
 ```
 
 ### 3.2 GitHub Secrets（仅 CI 部署需要）
@@ -229,24 +212,13 @@ wrangler secret list
 | `DOMAIN` | 业务主域名（如 `mail.example.com`） | 自定义 |
 | `ALLOWED_ORIGINS` | CORS 白名单，逗号分隔 | 自定义 |
 
-#### 3.2.3 Worker 运行时 Secrets（CI 用 `wrangler secret put` 镜像推送）
-
-| Secret | 说明 | 如何生成 |
-|---|---|---|
-| `JWT_SECRET` | JWT 签名密钥（HS256） | `openssl rand -base64 48` |
-| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile 验证密钥 | Turnstile Dashboard |
-| `SENDGRID_API_KEY` | SendGrid 出站发信（可选） | SendGrid Dashboard |
-
-> CI workflow 当前默认会推送 `JWT_SECRET`、`TURNSTILE_SECRET_KEY` 和（若已配置）`SENDGRID_API_KEY`。运行时用的 `CLOUDFLARE_API_TOKEN`（Email Routing 转发管理用，与 CI 部署 Token 区分）目前未在 workflow 中镜像，按需在本地用 `wrangler secret put` 推送。
-
-#### 3.2.4 前端构建变量（Vite 编译期注入）
+#### 3.2.3 前端构建变量（Vite 编译期注入）
 
 | Secret | 说明 |
 |---|---|
 | `VITE_API_BASE_URL` | API Worker 公开地址，如 `https://api.mail.example.com` |
-| `VITE_TURNSTILE_SITE_KEY` | Turnstile Site Key（前端可见） |
 
-#### 3.2.5 Pages 与健康检查
+#### 3.2.4 Pages 与健康检查
 
 | Secret | 说明 |
 |---|---|
@@ -271,18 +243,15 @@ API_URL=https://pmail-api.<your-subdomain>.workers.dev/health  # 健康检查用
 node scripts/bootstrap.mjs
 ```
 
-> **注意**：`.env.example` 默认没有 `ALLOWED_ORIGINS` 这一行，需要你**手动加上**，否则 bootstrap 不会渲染到 wrangler.toml 的 `[vars]` 段。
-
 `workers/api/wrangler.toml.example` 的 `[vars]` 段还有一堆默认值能调，列几个常用的：
 
 | 变量 | 默认 | 含义 |
 |---|---|---|
 | `DEFAULT_MAILBOX_TTL` | `3600` | 默认邮箱 TTL（秒） |
-| `MAX_MAILBOX_TTL` | `86400` | 邮箱 TTL 上限（秒） |
 | `GUEST_MAILBOX_TTL` | `7200` | 游客邮箱 TTL（秒） |
 | `MAX_EMAIL_SIZE` | `26214400` | 单封邮件大小上限（字节，25MB） |
 | `MAX_ATTACHMENT_SIZE` | `10485760` | 单附件大小上限（字节，10MB） |
-| `RATE_LIMIT_DEFAULT` | `100` | 每分钟请求上限/用户 |
+| `MAX_ATTACHMENTS` | `10` | 单封邮件最多附件数 |
 | `BACKUP_RETENTION_DAYS` | `30` | R2 备份保留天数 |
 
 要改的话直接编辑 `workers/api/wrangler.toml`（已渲染好的）或修改 `.env` 后重跑 bootstrap。
@@ -309,22 +278,25 @@ flowchart LR
 1. 完成 [§2](#2-cloudflare-资源准备) 全部 Cloudflare 资源准备，并保存所有 ID。
 2. 按 [§3.2](#32-github-secrets仅-ci-部署需要) 在 GitHub 仓库录入全部 Secrets，**逐项核对名称拼写**。
 3. 本地确认 `wrangler.toml.example`、`migrations/`、`.github/workflows/deploy.yml` 已提交。
-4. `git push origin main`，触发 workflow。GitHub Actions 顺序执行：
-   1. 用 GH Secrets `envsubst` 渲染 `workers/{api,email}/wrangler.toml`
-   2. 三个目录 `npm ci` 安装依赖
-   3. `wrangler d1 migrations apply pmail-db --remote` 应用数据库 schema
-   4. 把 secret 镜像通过 `wrangler secret put` 推到 API/Email Worker
-   5. `wrangler deploy` 部署 API Worker（`pmail-api`）
-   6. `wrangler deploy` 部署 Email Worker（`pmail-receiver`）
-   7. `npm run build` 构建前端 + `wrangler pages deploy dist` 部署前端
-   8. 如果设了 `API_URL` secret，curl `/health` 做健康检查
-5. 打开仓库 **Actions** 页面，按 job 顺序观察日志：
-   - `render-config`：envsubst 输出后 grep 不到 `${`
-   - `migrate`：`wrangler d1 migrations apply pmail-db --remote` 成功
-   - `deploy-api` / `deploy-email` / `deploy-pages`：三个 deploy 全绿
-   - `healthcheck`：`API_URL` 返回 200
+4. `git push origin main`，触发 workflow。GitHub Actions 单个 `deploy` job 按顺序执行以下 step：
+   1. **Render wrangler.toml from templates** — `envsubst` 用 GH Secrets 渲染两份 `wrangler.toml`
+   2. **Install API/Email/Web dependencies** — 三个目录分别 `npm ci`
+   3. **Apply D1 database migrations** — `wrangler d1 migrations apply pmail-db --remote`
+   4. **Verify JWT_SECRET is configured** — 检测 API Worker 是否已配置 `JWT_SECRET`，缺失则失败并提示先在本地跑 `node scripts/bootstrap.mjs`
+   5. **Deploy API Worker** — `pmail-api`
+   6. **Deploy Email Worker** — `pmail-receiver`
+   7. **Bind catch-all to Email Worker** — 调 Cloudflare API 把域名 catch-all 路由绑到 `pmail-receiver`（幂等）
+   8. **Build Web frontend** + **Deploy Cloudflare Pages** — 构建静态产物 + `wrangler pages deploy`
+   9. **Health check** — 若 `API_URL` secret 已配，curl `/health`；未配则 skip
+5. 打开仓库 **Actions** 页面观察日志，按 step 顺序检查是否全绿。常见检查点：
+   - `Render wrangler.toml`：渲染输出里没有 `${...}` 残留
+   - `Apply D1 database migrations`：迁移应用成功
+   - `Verify JWT_SECRET`：如果失败，说明本地没跑过 bootstrap，按提示先跑 `node scripts/bootstrap.mjs`
+   - `Deploy API/Email Worker` + `Deploy Cloudflare Pages`：三处 deploy 全绿
+   - `Bind catch-all`：返回 `success: true`
+   - `Health check`：`API_URL` 配置则返回 200，未配则显示 skipping
 6. 回到 Cloudflare Dashboard 按 [§5](#5-email-routing-绑定自动) 绑定 Email Routing。
-7. 浏览器访问前端，跑一遍：注册 → 收到验证邮件 → 登录 → 查看收件箱核心流程。
+7. 浏览器访问前端，跑一遍：注册 → 登录 → 查看收件箱核心流程。
 
 约 2–3 分钟完成。Actions tab 可实时查看进度，也可在该页 **Run workflow** 手动触发一次（无需 push）。
 
@@ -338,7 +310,7 @@ cd ../email && npx wrangler deploy
 cd ../web && npm run build && npx wrangler pages deploy dist --project-name=pmail-web --branch=main
 ```
 
-注意：本地手动部署**不会自动 apply D1 migrations**（需另跑 `npx wrangler d1 migrations apply pmail-db --remote`），且不会更新 GH Secret 中的 worker secret 镜像。
+注意：本地手动部署**不会自动 apply D1 migrations**（需另跑 `npx wrangler d1 migrations apply pmail-db --remote`）。
 
 ---
 
@@ -353,9 +325,7 @@ Email Routing 启用与 catch-all 绑定**已全自动化**，无需进 Dashboar
 
 ### 前置条件
 
-- `CLOUDFLARE_API_TOKEN` 权限需包含：
-  - `Zone: Zone: Read`（查 zone_id）
-  - `Zone: Email Routing: Edit`（启用 + 绑定 catch-all）
+- `CLOUDFLARE_API_TOKEN`：使用 [§2.3](#23-创建-cloudflare-api-tokenci-用) 创建的 CI 部署 Token 即可（已含 `Zone:Email Routing:Edit` 与查 zone_id 所需权限，**无需额外 token**）
 - 域名已添加到本 Cloudflare 账号的 zone 列表，且**没有冲突的 MX 记录**（如有其它邮件服务的 MX 记录，先到 DNS 面板删除）
 
 ### 故障排查
@@ -440,7 +410,7 @@ wrangler d1 execute pmail-db --remote \
 git push origin main
 ```
 
-GitHub Actions 会自动跑 `deploy.yml`：渲染 wrangler.toml → 推 secrets → apply migration → 部署 3 个 Worker → 健康检查。约 2–3 分钟。
+GitHub Actions 会自动跑 `deploy.yml`：渲染 wrangler.toml → apply migration → 验证 JWT_SECRET → 部署 3 个 Worker → 绑定 catch-all → 健康检查。约 2–3 分钟。
 
 Actions 状态可在仓库 **Actions** 标签页实时查看；也可在该页 **Run workflow** 手动触发一次（无需 push）。适用于：
 
@@ -589,10 +559,10 @@ wrangler d1 execute pmail-db --remote --command="SELECT id, address, expires_at 
 1. 改 GitHub 仓库 Settings → Secrets and variables → Actions 的对应 Secret
 2. Actions → Deploy PMail → **Run workflow**（workflow_dispatch）触发重新渲染 + 部署
 
-**Worker secret 类**（如 `TURNSTILE_SECRET_KEY`、`SENDGRID_API_KEY`）
+**Worker secret 类**（如 `CLOUDFLARE_API_TOKEN`）
 
 1. 本机：`cd workers/api && wrangler secret put XXX`（立即生效，不需要重新部署）
-2. **同步更新 GitHub Secret**，否则下次 CI 部署会把它覆盖回旧值
+2. Worker secret 当前 CI 不再镜像推送，仅在本地维护即可
 
 ### 8.6 🔐 安全注意事项
 
@@ -632,7 +602,7 @@ A：依次排查：
 4. 域名 MX 记录是否正确（Cloudflare 应自动配置，可在 DNS 页面确认）
 
 **Q：前端登录后调 API 报 401**
-A：JWT secret 不一致或未配置。检查 `wrangler secret list` 是否能看到 `JWT_SECRET`；若未设置，按 [§3.1](#31-worker-secrets本地与-ci-都需要) 跑 `wrangler secret put JWT_SECRET` 推送，然后重新部署 API Worker。注意一旦更换 `JWT_SECRET`，所有已签发的 token 都会失效。
+A：`JWT_SECRET` 未配置或前后不一致。确认 `wrangler secret list`（在 `workers/api/` 下）输出包含 `JWT_SECRET`。若缺失，跑 `node scripts/bootstrap.mjs` 让它自动推一遍，或手动 `openssl rand -base64 32 | wrangler secret put JWT_SECRET`。注意：更换 `JWT_SECRET` 后，所有已签发的 token 立即失效，这是预期行为。
 
 **Q：想测试 Email Worker 不想真的发邮件**
 A：`workers/email/wrangler.toml` 暂时把 `name` 改成测试名，本地 `wrangler dev` 启动后用 `curl` 模拟入站。或者注册一个测试域名只挂 Cloudflare、不发对外邮件。
@@ -649,14 +619,14 @@ A：免费套餐 CPU 时间上限 50ms。常见原因：邮件解析复杂、附
 完整删除部署：
 
 ```bash
-cd workers/api && wrangler delete --name pmail-api
-cd ../email && wrangler delete --name pmail-receiver
+cd workers/api && wrangler delete pmail-api
+cd ../email && wrangler delete pmail-receiver
 cd ../.. && wrangler pages project delete pmail-web
 
 # 数据资源（注意：会丢数据）
 wrangler d1 delete pmail-db
-wrangler r2 bucket delete pmail-storage         # 桶非空时需先清空
-wrangler kv namespace delete --binding=CACHE
+wrangler r2 bucket delete pmail-storage          # 桶非空时需先清空
+cd workers/api && wrangler kv namespace delete --binding=CACHE   # 需在 workers/api 目录下,wrangler 才能解析 binding
 
 # Disable Email Routing (also removes catch-all rule and locked MX/SPF records)
 # curl -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \

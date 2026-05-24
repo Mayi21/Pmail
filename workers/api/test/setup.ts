@@ -29,14 +29,10 @@ export const mockEnv = {
   },
   // Environment variables
   DOMAIN: 'test.example.com',
-  FRONTEND_URL: 'https://test.example.com',
   ALLOWED_ORIGINS: 'https://test.example.com',
   JWT_SECRET: 'test-jwt-secret-at-least-32-characters-long-for-vitest',
   ENABLE_AUDIT_LOG: 'true',
-  MAX_MAILBOXES_PER_USER: '10',
   DEFAULT_MAILBOX_TTL: '3600',
-  MAX_MAILBOX_TTL: '86400',
-  SENDGRID_API_KEY: undefined,
 };
 
 // Mock ExecutionContext

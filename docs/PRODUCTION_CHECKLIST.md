@@ -17,8 +17,7 @@ cd workers/api
 # 列出所有已配置的 secrets
 wrangler secret list
 
-# 当前已配置的 secrets:
-# ✅ TURNSTILE_SECRET_KEY
+# JWT_SECRET 由 scripts/bootstrap.mjs 首次执行时自动生成并通过 wrangler secret put 推送（idempotent）。需要轮换时手动重推即可。
 ```
 
 或在 Cloudflare Dashboard 查看: Workers & Pages → 选择 Worker → Settings → Variables → Encrypted
@@ -39,16 +38,11 @@ wrangler secret list
   - 操作: 在生产环境 `wrangler.toml` 中移除 localhost
   - 位置: `workers/api/wrangler.toml:60`
 
-- [ ] **JWT 令牌刷新机制**
-  - 当前: 仅使用 7 天过期的访问令牌，无 Refresh Token
-  - 风险: 令牌被盗后长期有效，无法远程撤销
-  - 方案: 双令牌机制（Access Token 15 分钟 + Refresh Token 30 天），启用 `sessions` 表，新增 `/api/auth/refresh` 端点
+- [ ] **JWT 密钥轮换运维 runbook**
+  - 当前: `JWT_SECRET` 为单一静态 HS256 密钥，由 `bootstrap.mjs` 自动生成并写入 Worker secret；无自动轮换、无版本共存
+  - 缺口: 轮换 `JWT_SECRET` 会让所有已签发 token 立即失效（7 天有效期内的全部用户被迫重新登录），没有平滑过渡机制
+  - 方案: 编写 runbook 说明手动轮换流程（`openssl rand -base64 32 | wrangler secret put JWT_SECRET`）和影响面；如需平滑轮换，后续引入 `kid` 版本化（目前未实现）
   - 位置: `workers/api/src/services/jwt.ts`
-
-- [ ] **密码重置令牌安全加固**
-  - 当前: 使用 `crypto.randomUUID()` 生成令牌，明文存储，无 IP 绑定
-  - 改为: 64 字符强随机令牌、存储哈希、一次性使用、绑定 IP、有效期降至 1 小时、使用后强制登出所有会话
-  - 位置: `workers/api/src/routes/auth.ts:318`
 
 ### 🗄️ 数据保护
 
@@ -316,20 +310,19 @@ wrangler secret list
 如果需要快速上线，以下是**绝对必须**完成的项目：
 
 ### 已完成 ✅
-1. ✅ 配置 `TURNSTILE_SECRET_KEY` 密钥 - 已通过 `wrangler secret` 配置
-2. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
+1. ✅ CSP 安全响应头 - 见 `web/index.html` 与 `web/public/_headers`
+2. 🟡 JWT 签名（单一静态 `JWT_SECRET`，HS256，由 bootstrap 自动生成 / 推送；无版本化轮换）
 
 ### 待完成 ⏳
 4. [ ] 配置 Cloudflare WAF 基础规则
 5. [ ] 从生产环境移除 `localhost` CORS 配置
 6. [ ] 配置 D1 数据库每日备份
-7. [ ] JWT 令牌刷新机制（Access + Refresh）
-8. [ ] 密码重置令牌安全加固（强随机 + 哈希存储 + 一次性 + 绑定 IP）
-9. [ ] 编写服务条款和隐私政策
+7. [ ] JWT 密钥轮换异常应急 runbook（含 cron 失败告警）
+8. [ ] 编写服务条款和隐私政策
 12. [ ] 配置至少一个告警（错误率或响应时间）
 13. [ ] 执行一轮安全测试（至少覆盖 SQL 注入、XSS、认证绕过）
 
-**快速上线完成度**: 4/13 (31%)
+**快速上线完成度**: 3/11 (27%)
 
 ---
 
@@ -343,20 +336,16 @@ wrangler secret list
   - [ ] 测试弱密码被拒绝
   - [ ] 测试常见密码被拒绝
   - [ ] 验证密码哈希强度（bcrypt, cost >= 10）
-  - [ ] 测试密码重置流程
-  - [ ] 验证重置令牌只能使用一次
 
 - [ ] **会话管理**
   - [ ] JWT 令牌正确过期
-  - [ ] Refresh Token 轮换工作正常
+  - [ ] 手动重推 `JWT_SECRET` 后所有已签发的 token 立即失效（预期行为）
   - [ ] 登出后令牌失效
   - [ ] 同时登录多设备管理正常
 
 - [ ] **登录保护**
   - [ ] 5 次失败后账户锁定
   - [ ] IP 锁定机制正常
-  - [ ] Turnstile CAPTCHA 有效
-  - [ ] 登录通知邮件发送（如启用）
 
 ### 输入验证
 
@@ -398,11 +387,6 @@ wrangler secret list
   - [ ] Credentials 正确配置
 
 ### 数据保护
-
-- [ ] **加密验证**
-  - [ ] 数据库中邮件内容已加密
-  - [ ] 解密功能正常
-  - [ ] R2 附件加密（如启用）
 
 - [ ] **敏感数据处理**
   - [ ] 日志中无密码明文
@@ -473,7 +457,7 @@ wrangler secret list
 ## 🎯 里程碑建议
 
 ### Milestone 1: 最小可上线版本 (MVP)
-- 完成所有高优先级项目（含 JWT 刷新、密码重置加固）
+- 完成所有高优先级项目（含 JWT 密钥应急 runbook）
 - 时间: 2-3 周
 
 ### Milestone 2: 生产就绪版本
@@ -491,19 +475,17 @@ wrangler secret list
 以下重要项目已经完成，可以放心使用：
 
 ### 🔐 安全与认证
-- ✅ JWT 签名（单一静态密钥 `JWT_SECRET`，HS256）
+- 🟡 JWT 签名（单一静态 `JWT_SECRET`，HS256，bootstrap 自动生成推送；无版本化轮换）
 - ✅ 管理员端点保护（requireAdmin 中间件）
 - ✅ 速率限制（分钟级 + 每日限制）
 - ✅ 登录失败锁定（5 次失败 = 15 分钟锁定）
 - ✅ CORS 配置（基于 ALLOWED_ORIGINS 环境变量）
-- ✅ Secrets 安全存储（TURNSTILE_SECRET_KEY）
-- ✅ Turnstile CAPTCHA 防护（`workers/api/src/services/turnstileService.ts`）
 - ✅ 密码复杂度基线（8-64 字符 + 大小写 + 数字，`workers/api/src/routes/auth.ts:29`）
 
 ### 🏗️ 基础设施
 - ✅ Workers 配置（API + Email Workers）
 - ✅ D1 数据库结构（完整的 schema.sql + 17+ 索引）
-- ✅ KV 命名空间（7 个 namespaces 全部配置）
+- ✅ KV 命名空间（仅 `CACHE` 一个，按 key 前缀复用：`reset:*` / `email_valid:*` / `settings:*`）
 - ✅ R2 存储桶（附件存储）
 - ✅ Cron 定时任务（每小时清理 + 每日 D1 备份）
 - ✅ Observability 启用（10% 采样率）

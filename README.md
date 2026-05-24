@@ -20,34 +20,21 @@ cp workers/email/wrangler.toml.example workers/email/wrangler.toml
 cp web/.env.example web/.env
 ```
 
-把上面 3 个文件中的 `your-*` 占位符全部替换为你自己的资源 ID、域名、Turnstile site key 等。两个 wrangler 配置中的 `database_id`、`bucket_name`、`CACHE` KV `id` 必须保持一致。
+把上面 3 个文件中的 `your-*` 占位符全部替换为你自己的资源 ID、域名等。两个 wrangler 配置中的 `database_id`、`bucket_name`、`CACHE` KV `id` 必须保持一致。
 
 ### 3. 配置 Secrets（敏感凭据）
 
-通过 `wrangler secret put` 在 `workers/api/` 和 `workers/email/` 目录下分别设置：
+PMail 的 JWT 签名密钥 `JWT_SECRET` 由 `scripts/bootstrap.mjs` 自动生成并通过 `wrangler secret put` 推送（首次执行时，后续重跑会跳过）。仅在启用 admin 域名/转发管理时，需要在 `workers/api/` 下额外推送 `CLOUDFLARE_API_TOKEN`（需具备 Email Routing Addresses: Edit 权限）。
+
+### 4. 使用 bootstrap 脚本一键初始化资源
 
 ```bash
-# 在 workers/api/ 下
-wrangler secret put JWT_SECRET                  # 至少 32 字节随机字符串
-wrangler secret put TURNSTILE_SECRET_KEY        # Cloudflare Turnstile 后台获取
+node scripts/bootstrap.mjs    # 创建 D1 / R2 / KV、渲染 wrangler.toml、并自动启用 Email Routing
 ```
 
-### 4. 初始化数据库 + 部署
+### 5. 通过 GitHub Actions 部署
 
-```bash
-# 初始化 D1 schema
-wrangler d1 execute <your-database-name> --file=./schema.sql
-
-# 部署 workers
-cd workers/api && npm install && npm run deploy
-cd ../email && npm install && npm run deploy
-
-# 部署前端
-cd ../../web && npm install && npm run build
-# 将 web/dist 目录通过 Cloudflare Pages 部署
-```
-
-最后在 Cloudflare Dashboard → Email Routing 中将 `*@your-domain.com` 路由到 `pmail-receiver` worker。
+部署（migrations + Workers + Pages）由 GitHub Actions 完成，本地不再执行 `wrangler deploy`。请按 [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) 配置仓库 secrets 并触发 workflow。
 
 ---
 
@@ -55,13 +42,12 @@ cd ../../web && npm install && npm run build
 
 ### 用户系统
 - 用户注册和登录
-- 密码找回功能
 - 用户数据完全隔离
 - 游客模式（无需注册，2 小时有效期）
 
 ### 邮箱管理
 - 随机临时邮箱地址生成
-- 每个用户独立管理多个邮箱（最多 10 个）
+- 每个用户独立管理多个邮箱（数量由 tier 配额决定，basic 默认 10）
 - 自定义邮箱过期时间（10 分钟 - 24 小时，或永不过期）
 - 邮箱自动过期删除
 - 多域名支持
@@ -81,8 +67,7 @@ cd ../../web && npm install && npm run build
 
 ### 安全特性
 - bcrypt 密码加密
-- JWT 无状态认证（HS256，静态 `JWT_SECRET`）
-- Turnstile CAPTCHA 验证
+- JWT 无状态认证（HS256，密钥 `JWT_SECRET` 由 bootstrap 自动生成并写入 Worker secret）
 - 登录锁定（5 次失败 = 15 分钟锁定）
 - 分级速率限制
 - XSS 防护（DOMPurify）和 CORS 配置
@@ -182,62 +167,48 @@ wrangler d1 execute temp-email-db --command="SELECT * FROM users LIMIT 5"
 
 ## 🚦 部署步骤
 
-### 1. 创建 Cloudflare 资源
+### 1. 一键初始化 Cloudflare 资源
 
 ```bash
 wrangler login
-
-# D1 数据库
-wrangler d1 create temp-email-db
-wrangler d1 execute temp-email-db --file=./schema.sql
-
-# R2 存储桶
-wrangler r2 bucket create temp-email-attachments
-
-# KV 命名空间
-wrangler kv namespace create "CACHE"
+node scripts/bootstrap.mjs
 ```
 
-### 2. 配置 wrangler.toml
+`bootstrap.mjs` 会自动：
 
-将上述步骤返回的资源 ID 填入 `workers/api/wrangler.toml` 和 `workers/email/wrangler.toml`。
+- 创建 D1 database、R2 bucket、`CACHE` KV namespace
+- 把对应 ID 写入 `workers/api/wrangler.toml` 与 `workers/email/wrangler.toml`
+- 通过 Cloudflare API 启用 Email Routing 并配置 MX / SPF 记录（需设置 `CLOUDFLARE_API_TOKEN` 环境变量）
 
-### 3. 配置 JWT 密钥
+### 2. 应用数据库 schema
 
 ```bash
+wrangler d1 execute <your-database-name> --file=./schema.sql
+```
+
+### 3. 配置 secrets
+
+PMail 的 JWT 签名密钥 `JWT_SECRET` 由 `scripts/bootstrap.mjs` 自动生成并通过 `wrangler secret put` 推送（首次执行时，后续重跑会跳过）。如需手动轮换 `JWT_SECRET` 或启用 admin 域名/转发管理，可按需手动推送：
+
+```bash
+# 仅在 bootstrap 未执行 / 需要手动轮换 JWT_SECRET 时
 cd workers/api
-wrangler secret put JWT_SECRET   # 输入至少 32 字节的随机字符串
-```
+openssl rand -base64 32 | wrangler secret put JWT_SECRET
 
-### 4. 部署
-
-```bash
-# 部署 API Worker
-cd workers/api && npm install && wrangler deploy
-
-# 部署 Email Worker
-cd workers/email && npm install && wrangler deploy
-
-# 部署前端
-cd web && npm install && npm run build && wrangler pages deploy dist
-```
-
-### 5. 配置 Email Routing
-
-1. Cloudflare Dashboard → 域名 → Email → Email Routing
-2. 启用 Email Routing
-3. Email Workers → 创建路由，选择 `pmail-receiver`
-4. 设置匹配规则为 **Catch-all**
-
-### 6. 设置环境变量
-
-```bash
-# 敏感信息（通过 wrangler secret）
+# 启用 admin 域名/转发管理（可选）
 cd workers/api
-wrangler secret put TURNSTILE_SECRET_KEY
+wrangler secret put CLOUDFLARE_API_TOKEN
 ```
 
-`wrangler.toml` 中的配置变量：
+### 4. 通过 GitHub Actions 部署
+
+将仓库 fork 到 GitHub，按 [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) 配置 `CLOUDFLARE_API_TOKEN` 等 secrets，推送到 `main` 即触发 `.github/workflows/deploy.yml`，自动部署 API Worker、Email Worker、前端 Pages。
+
+### 5. 绑定 Email Worker 到 Catch-all 路由
+
+`bootstrap.mjs` 仅启用 Email Routing，**首次部署完成后**需在 Cloudflare Dashboard → Email → Email Routing → Email Workers 把 Catch-all 规则指向 `pmail-receiver`。
+
+### 6. wrangler.toml 中的非敏感变量
 
 ```toml
 [vars]
@@ -257,8 +228,8 @@ GUEST_MAILBOX_TTL = "7200"
 | `FRONTEND_URL` | 前端部署 URL | wrangler.toml `[vars]` |
 | `ALLOWED_ORIGINS` | CORS 允许源（逗号分隔） | wrangler.toml `[vars]` |
 | `GUEST_MAILBOX_TTL` | 游客邮箱有效期秒数（默认 7200） | wrangler.toml `[vars]` |
-| `JWT_SECRET` | JWT 签名密钥（HS256） | `wrangler secret put` |
-| `TURNSTILE_SECRET_KEY` | Turnstile 验证密钥 | `wrangler secret put` |
+| `JWT_SECRET` | JWT 签名密钥（HS256） | 由 `scripts/bootstrap.mjs` 自动生成并 `wrangler secret put`，无需手动配置 |
+| `CLOUDFLARE_API_TOKEN`（可选） | admin 域名/转发管理用 | `wrangler secret put` |
 
 ### 定时任务
 
@@ -270,7 +241,7 @@ GUEST_MAILBOX_TTL = "7200"
 
 | 限制项 | 值 |
 |--------|-----|
-| 每用户最大邮箱数 | 10 |
+| 每用户最大邮箱数 | 由 tier 决定（basic 默认 10） |
 | 单个附件大小 | 10MB |
 | 邮件大小 | 25MB（Cloudflare 限制） |
 | 游客邮箱有效期 | 2 小时 |

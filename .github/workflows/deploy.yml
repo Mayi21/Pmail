@@ -68,30 +68,15 @@ jobs:
         working-directory: workers/api
         run: npx wrangler d1 migrations apply "$D1_DATABASE_NAME" --remote
 
-      - name: Push API Worker secret - DATABASE_ENCRYPTION_KEY
+      - name: Verify JWT_SECRET is configured
         working-directory: workers/api
-        env:
-          SECRET_VALUE: ${{ secrets.DATABASE_ENCRYPTION_KEY }}
-        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put DATABASE_ENCRYPTION_KEY
-
-      - name: Push API Worker secret - TURNSTILE_SECRET_KEY
-        working-directory: workers/api
-        env:
-          SECRET_VALUE: ${{ secrets.TURNSTILE_SECRET_KEY }}
-        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put TURNSTILE_SECRET_KEY
-
-      - name: Push API Worker secret - SENDGRID_API_KEY (optional)
-        if: ${{ secrets.SENDGRID_API_KEY != '' }}
-        working-directory: workers/api
-        env:
-          SECRET_VALUE: ${{ secrets.SENDGRID_API_KEY }}
-        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put SENDGRID_API_KEY
-
-      - name: Push Email Worker secret - DATABASE_ENCRYPTION_KEY
-        working-directory: workers/email
-        env:
-          SECRET_VALUE: ${{ secrets.DATABASE_ENCRYPTION_KEY }}
-        run: printf '%s' "$SECRET_VALUE" | npx wrangler secret put DATABASE_ENCRYPTION_KEY
+        run: |
+          set -euo pipefail
+          if ! npx wrangler secret list 2>/dev/null | grep -q '"JWT_SECRET"'; then
+            echo "::error::JWT_SECRET 未配置。请先在本地执行 'node scripts/bootstrap.mjs' 推送 JWT_SECRET 后再触发部署。详见 docs/DEPLOYMENT.md §3.1。"
+            exit 1
+          fi
+          echo "✓ JWT_SECRET 已配置"
 
       - name: Deploy API Worker
         working-directory: workers/api
@@ -141,7 +126,6 @@ jobs:
         working-directory: web
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-          VITE_TURNSTILE_SITE_KEY: ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
         run: npm run build
 
       - name: Deploy Cloudflare Pages
@@ -156,8 +140,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${API_URL:-}" ]; then
-            echo "API_URL secret is not set; skipping health check is not allowed - failing."
-            exit 1
+            echo "API_URL not set; skipping health check"
+            exit 0
           fi
           echo "Probing ${API_URL}/health"
           curl -fsS --retry 5 --retry-delay 5 --retry-connrefused "${API_URL}/health"

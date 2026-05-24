@@ -37,7 +37,6 @@ export interface RegisterResponse {
 export const loginSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(8),
-  turnstileToken: z.string().min(1, 'Verification required'),
 });
 
 export const registerSchema = z.object({
@@ -47,7 +46,6 @@ export const registerSchema = z.object({
     .min(8)
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
       i18n.t('validation.passwordRequirements')),
-  turnstileToken: z.string().min(1, 'Verification required'),
 });
 
 // API calls
@@ -62,16 +60,5 @@ export const authAPI = {
 
   me: async (): Promise<any> => {
     return apiClient.get('/api/auth/me');
-  },
-
-  forgotPassword: async (email: string): Promise<any> => {
-    return apiClient.post('/api/auth/forgot-password', { email });
-  },
-
-  resetPassword: async (token: string, newPassword: string): Promise<any> => {
-    return apiClient.post('/api/auth/reset-password', {
-      token,
-      new_password: newPassword,
-    });
   },
 };

@@ -22,16 +22,22 @@
 
 ## 🔌 API 接口文档
 
-本系统提供一套内部 API：使用 JWT Token 认证，供 Web 前端调用，路径前缀 `/api`。
+本系统仅提供内部 API（供 Web 前端调用），统一使用 JWT 认证。路由分两类：
+
+- `/api/*` — 普通用户端点，需要 JWT
+- `/api/admin/*` — 管理员端点，需要 JWT 且 `users.role = 'admin'`
+- 少量公开端点无需认证（健康检查、公开域名、公开配置、游客邮箱）
 
 ### 🌐 内部 API（Web 前端）
 
 #### 认证方式
 
-除健康检查外，内部 API 使用 JWT Token 认证，需要先登录获取 Token：
+除明确标注「无需认证」的端点外，所有 API 需要 JWT Token：
 ```http
 Authorization: Bearer {token}
 ```
+
+JWT 使用单一静态密钥签发与验证（HS256）。密钥 `JWT_SECRET` 作为 Worker secret 通过 `wrangler secret put` 写入（由 `scripts/bootstrap.mjs` 首次部署时自动生成并推送），逻辑见 `workers/api/src/services/jwt.ts`。需要轮换时手动重推 `JWT_SECRET`，所有已签发的 token 即时失效。
 
 ---
 
@@ -39,15 +45,17 @@ Authorization: Bearer {token}
 
 #### 0. 健康检查（无需认证）
 ```http
-GET /api/health
+GET /health           # 基础健康检查
+GET /health/detailed  # 包含 DB / KV / R2 依赖状态
+GET /health/ready     # 部署就绪检查
 
 成功响应（200）：
 {
   "status": "healthy",
   "service": "pmail-api",
   "timestamp": "2025-10-12T12:30:00Z",
-  "version": "1.0.0",
-  "uptime": 3600
+  "version": "1.0.0-kv-optimized",
+  "response_time": 1
 }
 ```
 
@@ -68,7 +76,7 @@ Content-Type: application/json
 成功响应（200）：
 {
   "success": true,
-  "message": "注册成功",
+  "message": "Registration successful",
   "data": {
     "user_id": 1,
     "username": "user123",
@@ -79,7 +87,8 @@ Content-Type: application/json
 失败响应（400）：
 {
   "success": false,
-  "error": "用户名已存在"
+  "error": "Username or email already exists",
+  "error_code": "USER_ALREADY_EXISTS"
 }
 ```
 
@@ -110,8 +119,12 @@ Content-Type: application/json
 失败响应（401）：
 {
   "success": false,
-  "error": "用户名或密码错误"
+  "error": "Invalid username or password",
+  "error_code": "AUTH_INVALID_CREDENTIALS"
 }
+
+说明：
+- 同时受 IP 与 username 双维度登录失败锁定（5 次失败 → 15 分钟锁定，返回 429）
 ```
 
 #### 3. 获取当前用户信息
@@ -143,52 +156,6 @@ Authorization: Bearer {token}
 }
 ```
 
-#### 4. 请求重置密码
-```http
-POST /api/auth/forgot-password
-Content-Type: application/json
-
-请求体：
-{
-  "email": "user@example.com"
-}
-
-成功响应（200）：
-{
-  "success": true,
-  "message": "重置密码邮件已发送，请查收"
-}
-
-说明：
-- 系统将向用户邮箱发送重置密码链接
-- 重置链接包含 token，有效期 1 小时
-- 即使邮箱不存在，也返回成功（防止用户枚举）
-```
-
-#### 5. 重置密码
-```http
-POST /api/auth/reset-password
-Content-Type: application/json
-
-请求体：
-{
-  "token": "reset_token_from_email",
-  "new_password": "new_strong_password"
-}
-
-成功响应（200）：
-{
-  "success": true,
-  "message": "密码重置成功，请重新登录"
-}
-
-失败响应（400）：
-{
-  "success": false,
-  "error": "重置 token 无效或已过期"
-}
-```
-
 ### 邮箱管理接口
 
 #### 1. 创建临时邮箱
@@ -199,8 +166,9 @@ Content-Type: application/json
 
 请求体（可选）：
 {
-  "prefix": "custom",      // 可选：自定义前缀
-  "expires_in": 3600       // 可选：过期时间（秒），默认1小时
+  "prefix": "custom",      // 可选：自定义前缀，匹配 ^[a-z0-9]+$
+  "expires_in": 3600,      // 可选：过期时间（秒）；0 = 永久邮箱，否则 600-86400
+  "domain": "example.com"  // 可选：指定使用哪个已启用的域名
 }
 
 成功响应（200）：
@@ -217,11 +185,21 @@ Content-Type: application/json
 失败响应（403）：
 {
   "success": false,
-  "error": "已达到最大邮箱数量限制（10个）"
+  "error": "Mailbox quota exceeded. You have 10/10 permanent mailboxes.",
+  "error_code": "QUOTA_EXCEEDED"
 }
 ```
 
-#### 2. 获取用户的邮箱列表
+#### 2. 创建游客邮箱（无需认证）
+```http
+POST /api/mailbox/create-guest
+Content-Type: application/json
+
+说明：游客邮箱 user_id 为 NULL，TTL 由 GUEST_MAILBOX_TTL 控制（默认 7200 秒），不可续期。
+响应字段包含 is_guest: true。
+```
+
+#### 3. 获取用户的邮箱列表
 ```http
 GET /api/mailbox/list
 Authorization: Bearer {token}
@@ -236,22 +214,17 @@ Authorization: Bearer {token}
       "created_at": "2025-10-12T12:30:00Z",
       "expires_at": "2025-10-12T13:30:00Z",
       "email_count": 3,
-      "unread_count": 2
+      "unread_count": 2,
+      "is_expired": false
     }
   ]
 }
 ```
 
-#### 3. 删除临时邮箱
+#### 4. 删除临时邮箱
 ```http
 DELETE /api/mailbox/:address
 Authorization: Bearer {token}
-
-成功响应（200）：
-{
-  "success": true,
-  "message": "邮箱已删除"
-}
 ```
 
 ### 邮件查询接口
@@ -262,8 +235,8 @@ GET /api/emails/:address
 Authorization: Bearer {token}
 
 查询参数（可选）：
-- page: 页码，默认1
-- limit: 每页数量，默认20
+- page: 页码，默认 1
+- limit: 每页数量，默认 20（最大 100）
 
 成功响应（200）：
 {
@@ -272,13 +245,15 @@ Authorization: Bearer {token}
     "emails": [
       {
         "id": 1,
-        "from": "noreply@github.com",
+        "from_address": "noreply@github.com",
+        "from_name": null,
+        "to_address": "abc123@temp.example.com",
         "subject": "Verify your email address",
-        "preview": "Please click the link to verify...",
+        "body_text": "Please click the link to verify...",
         "received_at": "2025-10-12T12:28:35Z",
         "is_read": false,
-        "has_attachments": true,
-        "attachment_count": 1
+        "size_bytes": 1234,
+        "has_attachments": true
       }
     ],
     "total": 2,
@@ -288,7 +263,12 @@ Authorization: Bearer {token}
 }
 ```
 
-#### 2. 关键字搜索邮件
+#### 2. 游客邮箱邮件列表（无需认证）
+```http
+GET /api/emails/guest/:address
+```
+
+#### 3. 关键字搜索邮件
 ```http
 GET /api/emails/:address/search?q=keyword
 Authorization: Bearer {token}
@@ -296,43 +276,43 @@ Authorization: Bearer {token}
 查询参数：
 - q: 搜索关键字（必填）
 - scope: 搜索范围，默认 "all"（all/subject/from/body）
-- date_from: 开始日期（ISO 8601格式）
-- date_to: 结束日期（ISO 8601格式）
-- page: 页码，默认1
-- limit: 每页数量，默认20
+- date_from: 开始日期（ISO 8601）
+- date_to: 结束日期（ISO 8601）
+- page, limit: 分页
 ```
 
-#### 3. 获取邮件详情
+#### 4. 获取邮件详情
 ```http
 GET /api/email/:id
 Authorization: Bearer {token}
 ```
+另有 `GET /api/email/guest/:id`（无需认证，仅返回游客邮箱中的邮件）。
 
-#### 4. 删除邮件
+#### 5. 删除单封邮件
 ```http
 DELETE /api/email/:id
 Authorization: Bearer {token}
 ```
 
-#### 5. 批量删除邮件
+#### 6. 批量删除邮件
 ```http
-DELETE /api/emails/batch
+DELETE /api/email/batch
 Authorization: Bearer {token}
 Content-Type: application/json
 
 请求体：
 {
-  "ids": [1, 2, 3, 4, 5]
+  "ids": [1, 2, 3, 4, 5]   // 1-100 个 ID
 }
 ```
 
-#### 6. 查看原始邮件
+#### 7. 查看原始邮件
 ```http
 GET /api/email/:id/raw
 Authorization: Bearer {token}
 ```
 
-#### 7. 标记为已读
+#### 8. 标记为已读
 ```http
 PATCH /api/email/:id/read
 Authorization: Bearer {token}
@@ -340,16 +320,129 @@ Authorization: Bearer {token}
 
 ### 附件接口
 
-#### 下载附件
 ```http
-GET /api/attachment/:id
-Authorization: Bearer {token}
+GET    /api/attachment/:id                 # 附件元数据
+GET    /api/attachment/:id/download        # 下载附件（流式）
+GET    /api/attachment/:id/url             # 生成签名下载 URL（expires_in 60-86400）
+GET    /api/attachment/:id/preview         # 图片预览（可带 width / height）
+POST   /api/attachment/:id/scan            # 病毒扫描
+DELETE /api/attachment/:id                 # 删除附件
+GET    /api/attachment/email/:emailId      # 某封邮件的全部附件
+GET    /api/attachment/storage/stats       # 当前用户附件存储统计
+POST   /api/attachment/cleanup             # 清理过期附件（仅 admin）
+```
 
-权限验证流程：
-1. 通过 attachment_id 查询附件记录
-2. 通过 email_id 查询邮件所属的 temp_email_id
-3. 验证 temp_email.user_id 是否与当前用户匹配
-4. 仅当权限验证通过时，从 R2 读取文件并返回
+权限验证：通过 `attachment_id → email_id → temp_email_id` 链验证 `temp_emails.user_id` 与当前用户匹配。附件本体存放在 R2 桶的 `attachments/{emailId}/{uuid}-{filename}` 路径下。
+
+### 用户信息接口
+
+```http
+GET /api/user/me            # 用户资料 + tier 信息 + quota 详情
+GET /api/user/quota         # 仅 quota 信息（轻量版）
+GET /api/user/statistics    # 用户统计明细
+```
+
+### 用户设置接口
+
+```http
+GET   /api/user/settings    # 获取用户设置
+PATCH /api/user/settings    # 更新用户设置（局部更新）
+```
+
+字段：`default_mailbox_duration`、`timezone`、`notifications_enabled`、`webhook_enabled`、`webhook_url`、`webhook_secret`。
+
+### 邮件转发接口
+
+```http
+GET    /api/user/forwarding         # 当前转发配置
+PUT    /api/user/forwarding         # 设置/更新转发目标（自动调用 Cloudflare API 创建 Destination Address）
+POST   /api/user/forwarding/refresh # 刷新目标地址的验证状态
+PATCH  /api/user/forwarding/toggle  # 开关转发（{ enabled: boolean }）
+DELETE /api/user/forwarding         # 删除转发配置
+```
+
+转发目标域名不允许使用本服务管理的任何域名（防止环路）。
+
+### 兑换码接口
+
+```http
+POST /api/redemption/redeem    # 兑换代码 { code: "..." }
+POST /api/redemption/check     # 校验代码是否可用（不消费）
+GET  /api/redemption/history   # 当前用户兑换历史（limit 默认 50，最大 100）
+```
+
+### 公告接口
+
+```http
+GET  /api/announcements/unread   # 未读公告列表（已登录用户）
+POST /api/announcements/:id/read # 标记公告已读
+```
+
+### 公开端点（无需认证）
+
+```http
+GET /api/settings/public      # 公开的系统配置（is_public = 1）
+GET /api/domains              # 已启用的域名列表
+GET /api/domains/default      # 默认域名
+```
+
+### 管理员接口（`/api/admin/*`，需要 admin 角色）
+
+```http
+# 统计
+GET    /api/admin/statistics
+
+# 用户管理
+GET    /api/admin/users
+GET    /api/admin/users/:id
+PATCH  /api/admin/users/:id/tier
+PATCH  /api/admin/users/:id/role
+DELETE /api/admin/users/:id
+
+# Tier 管理
+GET    /api/admin/tiers/list
+GET    /api/admin/tiers/:id
+POST   /api/admin/tiers/create
+PATCH  /api/admin/tiers/:id/update
+PATCH  /api/admin/tiers/:id/toggle
+DELETE /api/admin/tiers/:id
+
+# 兑换码管理
+POST   /api/admin/redemption/generate
+GET    /api/admin/redemption/list
+GET    /api/admin/redemption/:id
+PATCH  /api/admin/redemption/:id/toggle
+DELETE /api/admin/redemption/:id
+
+# 系统设置
+GET    /api/admin/settings
+GET    /api/admin/settings/:key
+PATCH  /api/admin/settings/:key
+POST   /api/admin/settings/batch
+
+# 备份
+POST   /api/admin/backup/trigger
+GET    /api/admin/backup/list
+GET    /api/admin/backup/latest
+GET    /api/admin/backup/:encodedKey/download
+DELETE /api/admin/backup/:encodedKey
+
+# 公告管理
+POST   /api/admin/announcements
+GET    /api/admin/announcements/list
+GET    /api/admin/announcements/:id
+PATCH  /api/admin/announcements/:id
+PATCH  /api/admin/announcements/:id/toggle
+DELETE /api/admin/announcements/:id
+
+# 域名管理
+GET    /api/admin/domains/list
+GET    /api/admin/domains/:id
+POST   /api/admin/domains/create
+PATCH  /api/admin/domains/:id/update
+PATCH  /api/admin/domains/:id/toggle
+PATCH  /api/admin/domains/:id/set-default
+DELETE /api/admin/domains/:id
 ```
 
 ### 状态码说明
@@ -469,80 +562,34 @@ Authorization: Bearer {token}
 ### 邮件接收流程
 ```
 外部邮件 → Cloudflare Email Routing
-         → Email Worker (接收邮件)
-         → 验证收件地址在 D1 中存在
-         → 解析邮件内容
-         → 邮件正文/头部存入 D1，附件存入 R2
+         → Email Worker (email() handler 接收 catch-all 邮件)
+         → 校验收件域名（KV `settings:active_domains` → D1 domains 表 → 回退 env.DOMAIN）
+         → 校验收件地址（KV `email_valid:<address>` → D1 temp_emails；仅缓存有效地址）
+         → postal-mime 解析
+         → 正文 / HTML / raw 直接以明文写入 D1
+         → 附件写 R2（key 格式 attachments/{emailId}/{uuid}-{filename}）
 ```
 
 ### 用户访问流程
 ```
 用户访问 → Cloudflare Pages (前端)
          → 调用 API Worker
-         → 验证 JWT Token
-         → 查询 D1 数据库
+         → 验证 JWT Token（HS256 单密钥）
+         → 查询 D1 数据库（必须包含 user_id 与 deleted_at IS NULL 过滤）
          → 返回数据
 ```
 
-### 消息队列机制（可选优化）
+### 缓存策略
 
-使用 Cloudflare Queues 异步处理邮件：
+仅使用 1 个 KV namespace `CACHE`，按 key 前缀复用：
 
-```typescript
-// Email Worker - 快速接收并入队
-export default {
-  async email(message: EmailMessage, env: Env) {
-    const toAddress = message.to[0].address;
-    const isValid = await quickValidateAddress(toAddress, env.KV);
+| Key 前缀 | 用途 | TTL |
+|----------|------|-----|
+| `reset:*` | 密码重置 token | 1 小时 |
+| `email_valid:<address>` | 收件地址正向缓存（**只写有效地址**，无效地址直查 D1 防 KV 配额被刷爆） | 与邮箱过期时间一致；永久邮箱 7 天 |
+| `settings:*` | 应用级配置（含 `active_domains`） | 由配置项决定 |
 
-    if (!isValid) {
-      message.setReject('Invalid recipient');
-      return;
-    }
-
-    await env.EMAIL_QUEUE.send({
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-      message: {
-        from: message.from,
-        to: message.to,
-        subject: message.subject,
-        headers: Object.fromEntries(message.headers),
-        rawEmail: await streamToString(message.raw)
-      }
-    });
-  }
-};
-```
-
-队列配置（wrangler.toml）：
-```toml
-[[queues.producers]]
-queue = "email-queue"
-binding = "EMAIL_QUEUE"
-
-[[queues.consumers]]
-queue = "email-queue"
-max_batch_size = 10
-max_batch_timeout = 30
-max_retries = 3
-dead_letter_queue = "email-dlq"
-```
-
-### 多级缓存策略
-
-```
-L1: 内存缓存（Worker 实例内，60s TTL）
-L2: KV 缓存（跨 Worker 共享，5min TTL）
-L3: D1 数据库（持久化存储）
-```
-
-| 数据类型 | L1 TTL | L2 TTL | 更新策略 |
-|---------|--------|--------|----------|
-| 用户信息 | 60s | 5分钟 | 登录时更新 |
-| 邮箱列表 | 30s | 2分钟 | 创建/删除时失效 |
-| 邮件列表 | 10s | 1分钟 | 新邮件时失效 |
-| 邮件详情 | 120s | 10分钟 | 基本不变 |
+进程内（Worker 实例内）的 `Map` 用于分钟级速率限制（`middleware/rateLimit.ts`），跨实例重置；日级速率限制由 D1 的 `rate_limits` 表持久化。
 
 ---
 
@@ -577,20 +624,17 @@ users → temp_emails → emails → attachments
 
 ### JWT 签名密钥
 
-JWT 使用单一静态密钥 `JWT_SECRET`（HS256），通过 `wrangler secret put JWT_SECRET` 设置。签发与验证逻辑见 `workers/api/src/services/jwt.ts`。
+JWT 使用单一静态密钥签发与验证（HS256）。密钥 `JWT_SECRET` 作为 Cloudflare Worker secret 存储，通过 `wrangler secret put JWT_SECRET` 写入（`scripts/bootstrap.mjs` 首次部署时用 `openssl rand -base64 32` 自动生成并推送；若已存在则跳过）。签名与验证使用同一密钥，实现见 `workers/api/src/services/jwt.ts`，token 有效期 7 天。如需轮换，手动重推 `JWT_SECRET` 即可，效果是所有已签发的 token 立即失效、用户被迫重新登录。当前架构不支持密钥共存的平滑过渡，如需平滑轮换需引入版本化机制（暂未实现）。
 
-### 密码重置流程
+### 数据清理与定时任务
 
-```
-用户提交邮箱 → 生成重置 Token → 存入 KV（TTL 1小时）→ 发送重置邮件
-→ 用户点击链接 → 验证 Token → 更新密码 → 删除 Token
-```
+| Cron | 作用 |
+|------|------|
+| `0 * * * *` | 每小时清理过期邮箱（级联删除邮件 / 附件）+ 检查 tier 过期自动降级 |
+| `0 2 * * *` | 每日 02:00 UTC 备份 D1 到 R2（`backups/` 前缀），并按 `BACKUP_RETENTION_DAYS` 清理旧备份 |
 
-### 数据清理机制
-
-- **Cron Trigger**：每小时执行清理过期邮箱、级联删除邮件和附件
-- **软删除**：使用 `deleted_at` 时间戳，查询默认过滤 `WHERE deleted_at IS NULL`
-- **存储限制**：单用户最多 10 个有效邮箱
+- **软删除**：`users`、`temp_emails`、`emails`、`attachments` 都使用 `deleted_at` 时间戳，查询默认过滤 `WHERE deleted_at IS NULL`
+- **配额**：每用户最大邮箱数由 `tier_configs` 表的 `permanent_mailbox_quota` / `temporary_mailbox_quota` 字段决定（basic 默认 10 永久邮箱）
 
 ---
 

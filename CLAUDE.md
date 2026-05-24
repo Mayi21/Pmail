@@ -47,7 +47,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PMail 是部署在 Cloudflare 免费服务上的临时邮箱系统，由三个独立部署单元组成：
 
-- **API Worker** (`workers/api/`) — Hono REST API，JWT 认证、用户/邮箱/邮件管理、定时任务、Queue 消费者
+- **API Worker** (`workers/api/`) — Hono REST API，JWT 认证、用户/邮箱/邮件管理、定时任务
 - **Email Worker** (`workers/email/`) — Cloudflare Email Routing 的 `email()` handler，接收 catch-all 邮件并写入 D1 + R2
 - **Web Frontend** (`web/`) — React + Vite + TanStack Query + Zustand SPA，部署到 Cloudflare Pages
 
@@ -189,7 +189,7 @@ cp .env.example web/.env
 
 | 主题 | 文件 |
 |------|------|
-| 入口 + cron + queue | `workers/api/src/index.ts` |
+| 入口 + cron | `workers/api/src/index.ts` |
 | 认证中间件 | `workers/api/src/middleware/auth.ts` |
 | JWT 签发与验证 | `workers/api/src/services/jwt.ts` |
 | 速率限制 | `workers/api/src/middleware/rateLimit.ts` |

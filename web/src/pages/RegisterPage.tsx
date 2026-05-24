@@ -11,9 +11,7 @@ import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import TurnstileWidget from '../components/TurnstileWidget';
 
-// Form-specific schema (without turnstileToken)
 const registerFormSchema = z.object({
   username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/),
   email: z.string().email(),
@@ -30,7 +28,6 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { register: registerUser, isLoading } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string>('');
 
   const {
     register,
@@ -42,14 +39,7 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      // Check if Turnstile token is available
-      if (!turnstileToken) {
-        toast.error('Please complete the verification');
-        return;
-      }
-
-      // Include Turnstile token in registration data
-      await registerUser(data.username, data.email, data.password, turnstileToken);
+      await registerUser(data.username, data.email, data.password);
       toast.success(t('auth.registerSuccess'));
       navigate('/login');
     } catch (error: any) {
@@ -191,22 +181,10 @@ export default function RegisterPage() {
               </label>
             </div>
 
-            {/* Turnstile Verification */}
-            <div className="flex justify-center">
-              <TurnstileWidget
-                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || ''}
-                onSuccess={setTurnstileToken}
-                onError={() => toast.error('Verification failed, please refresh the page')}
-                onExpire={() => setTurnstileToken('')}
-                theme="light"
-                size="normal"
-              />
-            </div>
-
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading || !turnstileToken}
+              disabled={isLoading}
               className="btn-neo-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.creatingAccount') : t('auth.signUp')}

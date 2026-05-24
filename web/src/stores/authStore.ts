@@ -15,8 +15,8 @@ interface AuthState {
   isGuestMode: boolean; // 游客模式标识
 
   // Actions
-  login: (username: string, password: string, turnstileToken: string) => Promise<void>;
-  register: (username: string, email: string, password: string, turnstileToken: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
   enterGuestMode: () => void; // 进入游客模式
@@ -46,10 +46,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  login: async (username: string, password: string, turnstileToken: string) => {
+  login: async (username: string, password: string) => {
     set({ isLoading: true });
     try {
-      const response = await authAPI.login({ username, password, turnstileToken });
+      const response = await authAPI.login({ username, password });
       tokenManager.setToken(response.data.token);
       set({
         user: response.data.user,
@@ -62,10 +62,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (username: string, email: string, password: string, turnstileToken: string) => {
+  register: async (username: string, email: string, password: string) => {
     set({ isLoading: true });
     try {
-      await authAPI.register({ username, email, password, turnstileToken });
+      await authAPI.register({ username, email, password });
       set({ isLoading: false });
     } catch (error) {
       set({ isLoading: false });

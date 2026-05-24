@@ -12,7 +12,6 @@ import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import TurnstileWidget from '../components/TurnstileWidget';
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
@@ -21,26 +20,22 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string>('');
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       username: '',
       password: '',
-      turnstileToken: '',
     },
   });
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      // Include Turnstile token in login data
-      await login(data.username, data.password, data.turnstileToken);
+      await login(data.username, data.password);
       toast.success(t('auth.loginSuccess'));
       navigate('/');
     } catch (error: any) {
@@ -162,45 +157,18 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Remember Me & Forgot Password */}
+            {/* Remember Me */}
             <div className="flex items-center justify-between">
               <label className="flex items-center cursor-pointer">
                 <input type="checkbox" className="w-5 h-5 border-3 border-neo-black rounded-neo-xs accent-neo-cyan cursor-pointer hover:border-4 transition-all" />
                 <span className="ml-2 text-sm text-neo-black font-medium">{t('auth.rememberMe')}</span>
               </label>
-              <Link
-                to="/forgot-password"
-                className="text-sm text-neo-black font-bold hover:underline decoration-3 decoration-neo-black"
-              >
-                {t('auth.forgotPassword')}
-              </Link>
             </div>
-
-            {/* Turnstile Verification */}
-            <div className="flex justify-center">
-              <TurnstileWidget
-                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || ''}
-                onSuccess={(token) => {
-                  setTurnstileToken(token);
-                  setValue('turnstileToken', token);
-                }}
-                onError={() => toast.error('Verification failed, please refresh the page')}
-                onExpire={() => {
-                  setTurnstileToken('');
-                  setValue('turnstileToken', '');
-                }}
-                theme="light"
-                size="normal"
-              />
-            </div>
-            {errors.turnstileToken && (
-              <p className="text-neo-red text-sm mt-1 font-medium text-center">{errors.turnstileToken.message}</p>
-            )}
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading || !turnstileToken}
+              disabled={isLoading}
               className="btn-neo-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? t('auth.loggingIn') : t('auth.login')}

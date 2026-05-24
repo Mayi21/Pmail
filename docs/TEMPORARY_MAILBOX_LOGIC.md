@@ -1,7 +1,7 @@
 # 临时邮箱计算逻辑技术文档
 
-> **文档版本**: v1.0
-> **最后更新**: 2025-11-11
+> **文档版本**: v1.1
+> **最后更新**: 2026-05-24
 > **目标读者**: 后端开发者、系统维护人员
 
 ## 📋 文档概述
@@ -440,11 +440,11 @@ async function cleanupPMail(
   // 2. 删除 R2 中的附件
   for (const email of emails.results) {
     const attachments = await env.DB.prepare(`
-      SELECT attachment_key FROM attachments WHERE email_id = ?
+      SELECT r2_key FROM attachments WHERE email_id = ?
     `).bind(email.id).all();
 
     for (const attachment of attachments.results) {
-      await env.ATTACHMENTS.delete(attachment.attachment_key as string);
+      await env.R2.delete(attachment.r2_key as string);
     }
   }
 
@@ -454,6 +454,9 @@ async function cleanupPMail(
     SET deleted_at = datetime('now')
     WHERE id = ?
   `).bind(tempEmail.id).run();
+
+  // 4. 清理 CACHE KV 中的 email_valid 标记
+  await env.CACHE?.delete(`email_valid:${tempEmail.address}`).catch(() => {});
 
   console.log(`Cleaned up mailbox: ${tempEmail.address}`);
 }
@@ -650,7 +653,7 @@ export async function getUserTierConfig(
 ```sql
 CREATE TABLE IF NOT EXISTS tier_configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tier_name TEXT NOT NULL UNIQUE,           -- 等级名称（basic, premium, vip）
+    tier_name TEXT NOT NULL UNIQUE,           -- 等级名称（basic, premium）
     display_name TEXT NOT NULL,               -- 显示名称
     sort_order INTEGER DEFAULT 0,             -- 排序
     permanent_mailbox_quota INTEGER DEFAULT 0, -- 永久邮箱配额
@@ -663,9 +666,8 @@ CREATE TABLE IF NOT EXISTS tier_configs (
 
 -- 初始数据
 INSERT OR IGNORE INTO tier_configs (id, tier_name, display_name, sort_order, permanent_mailbox_quota, temporary_mailbox_quota, description, is_active) VALUES
-  (1, 'basic', '普通用户', 0, 10, 100, '普通用户等级', 1),
-  (2, 'premium', '优选用户', 10, 100, -1, '优选用户等级', 1),
-  (3, 'vip', 'VIP 用户', 20, 200, -1, 'VIP 用户等级', 1);
+  (1, 'basic', '普通用户', 0, 10, 100, '默认等级，适合个人轻度使用', 1),
+  (2, 'premium', '优选用户', 10, 100, -1, '高级等级，无限临时邮箱，适合重度使用者', 1);
 ```
 
 ---
@@ -840,8 +842,9 @@ Cron: "0 * * * *"
   │   │            LIMIT 100
   │   │
   │   ├─> [步骤2] 清理附件和邮件
-  │   │   └─> 删除 R2 中的附件
+  │   │   └─> 删除 R2 中的附件（key 前缀 attachments/）
   │   │   └─> SQL: UPDATE temp_emails SET deleted_at = datetime('now')
+  │   │   └─> 清理 CACHE KV 的 email_valid:<address> 标记
   │   │
   │   └─> [步骤3] ⚠️ 更新统计（不完整）
   │       └─> updateUserStatistics(userId, env)

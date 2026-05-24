@@ -112,7 +112,6 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Authentication endpoints: 5 rpm
   '/api/auth/login': { rpm: 5, key: (c) => `auth:${getClientIP(c)}` },
   '/api/auth/register': { rpm: 3, rpd: 10, key: (c) => `register:${getClientIP(c)}` },
-  '/api/auth/forgot-password': { rpm: 3, key: (c) => `forgot:${getClientIP(c)}` },
 
   // Guest mailbox creation: 1 rpm, 100 rpd per IP
   '/api/mailbox/create-guest': { rpm: 1, rpd: 100, key: (c) => `guest:${getClientIP(c)}` },

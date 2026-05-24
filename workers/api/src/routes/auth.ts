@@ -7,8 +7,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { signToken } from '../services/jwt';
-import { EmailService } from '../services/emailService';
-import { TurnstileService } from '../services/turnstileService';
 import { getBooleanSetting } from '../services/settingsService';
 import {
   checkLockStatus,
@@ -29,23 +27,11 @@ const registerSchema = z.object({
   password: z.string().min(8).max(64)
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
       'Password must contain uppercase, lowercase, and number'),
-  turnstileToken: z.string().min(1, 'Verification required'),
 });
 
 const loginSchema = z.object({
   username: z.string(),
   password: z.string(),
-  turnstileToken: z.string().min(1, 'Verification required'),
-});
-
-const forgotPasswordSchema = z.object({
-  email: z.string().email(),
-});
-
-const resetPasswordSchema = z.object({
-  token: z.string(),
-  new_password: z.string().min(8).max(64)
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/),
 });
 
 /**
@@ -67,18 +53,7 @@ app.post('/register', async (c) => {
       }, 403);
     }
 
-    // Verify Turnstile token
-    const turnstileService = new TurnstileService(c.env);
     const clientIP = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || '';
-    const isValidToken = await turnstileService.verifyToken(validated.turnstileToken, clientIP);
-
-    if (!isValidToken) {
-      return c.json({
-        success: false,
-        error: 'Verification failed, please try again',
-        error_code: 'TURNSTILE_VERIFICATION_FAILED',
-      }, 400);
-    }
 
     // Check if user already exists
     const existingUser = await c.env.DB.prepare(`
@@ -160,18 +135,6 @@ app.post('/login', async (c) => {
     const body = await c.req.json();
     const validated = loginSchema.parse(body);
     const clientIP = getClientIP(c.req.raw);
-
-    // 0. Verify Turnstile token first (protect against bots)
-    const turnstileService = new TurnstileService(c.env);
-    const isValidToken = await turnstileService.verifyToken(validated.turnstileToken, clientIP);
-
-    if (!isValidToken) {
-      return c.json({
-        success: false,
-        error: 'Verification failed, please try again',
-        error_code: 'TURNSTILE_VERIFICATION_FAILED',
-      }, 400);
-    }
 
     // 1. Check if IP is locked
     const ipLockStatus = await checkLockStatus(c.env.DB, clientIP, 'ip');
@@ -325,139 +288,6 @@ app.get('/me', jwtAuth, async (c) => {
       },
     },
   });
-});
-
-/**
- * POST /api/auth/forgot-password
- * Request password reset
- */
-app.post('/forgot-password', async (c) => {
-  try {
-    const body = await c.req.json();
-    const validated = forgotPasswordSchema.parse(body);
-
-    // Check if user exists (but don't reveal this in response)
-    const user = await c.env.DB.prepare(`
-      SELECT id, username FROM users WHERE email = ?
-    `).bind(validated.email).first<{id: number; username: string}>();
-
-    if (user) {
-      // Generate reset token
-      const resetToken = crypto.randomUUID();
-      const tokenData = {
-        user_id: user.id,
-        email: validated.email,
-        expires: Date.now() + 3600000, // 1 hour
-      };
-
-      // Store token in KV
-      await c.env.CACHE.put(
-        `reset:${resetToken}`,
-        JSON.stringify(tokenData),
-        { expirationTtl: 3600 }
-      );
-
-      // Send password reset email
-      const emailService = new EmailService(c.env);
-      const emailSent = await emailService.sendPasswordResetEmail(
-        validated.email,
-        user.username,
-        resetToken
-      );
-
-      if (!emailSent) {
-        console.error(`Failed to send password reset email to ${validated.email}`);
-        // Note: We still return success to prevent email enumeration
-      }
-
-      // Log password reset request
-      await c.env.DB.prepare(`
-        INSERT INTO audit_logs (user_id, action, entity_type, ip_address)
-        VALUES (?, 'PASSWORD_RESET_REQUEST', 'user', ?)
-      `).bind(user.id, c.req.header('CF-Connecting-IP')).run();
-    }
-
-    // Always return success to prevent email enumeration
-    return c.json({
-      success: true,
-      message: 'If the email exists, a password reset link has been sent',
-    });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return c.json({
-        success: false,
-        error: 'Invalid email format',
-        error_code: ErrorCode.VALIDATION_ERROR,
-      }, 400);
-    }
-    throw error;
-  }
-});
-
-/**
- * POST /api/auth/reset-password
- * Reset password with token
- */
-app.post('/reset-password', async (c) => {
-  try {
-    const body = await c.req.json();
-    const validated = resetPasswordSchema.parse(body);
-
-    // Get token data from KV
-    const tokenData = await c.env.CACHE.get(`reset:${validated.token}`);
-    if (!tokenData) {
-      return c.json({
-        success: false,
-        error: 'Invalid or expired reset token',
-        error_code: ErrorCode.AUTH_TOKEN_INVALID,
-      }, 400);
-    }
-
-    const data = JSON.parse(tokenData);
-
-    // Check if token is expired
-    if (Date.now() > data.expires) {
-      await c.env.CACHE.delete(`reset:${validated.token}`);
-      return c.json({
-        success: false,
-        error: 'Reset token has expired',
-        error_code: ErrorCode.AUTH_TOKEN_EXPIRED,
-      }, 400);
-    }
-
-    // Hash new password
-    const passwordHash = await bcrypt.hash(validated.new_password, 10);
-
-    // Update password
-    await c.env.DB.prepare(`
-      UPDATE users SET password_hash = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(passwordHash, data.user_id).run();
-
-    // Delete the used token
-    await c.env.CACHE.delete(`reset:${validated.token}`);
-
-    // Log password reset
-    await c.env.DB.prepare(`
-      INSERT INTO audit_logs (user_id, action, entity_type)
-      VALUES (?, 'PASSWORD_RESET', 'user')
-    `).bind(data.user_id).run();
-
-    return c.json({
-      success: true,
-      message: 'Password has been reset successfully',
-    });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return c.json({
-        success: false,
-        error: 'Password does not meet requirements',
-        error_code: ErrorCode.VALIDATION_ERROR,
-        details: error.errors,
-      }, 400);
-    }
-    throw error;
-  }
 });
 
 export default app;
